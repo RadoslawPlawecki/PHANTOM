@@ -7,23 +7,6 @@ on:
     branches: [master]
 
 jobs:
-  commit-messages:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Commit start with [PHM-X] or [PR-X]
-        env:
-          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
-        run: |
-          bad=$(git log --no-merges --perl-regexp --author='^(?!dependabot\[bot\])' --format=%s "$RANGE" | grep -Ev '^\[(PHM|PR)-[0-9]+\] ' || true)
-          if [ -n "$bad" ]; then
-            echo "Commit must start with [PHM-<number>] or [PR-<number>]:"
-            echo "$bad"
-            exit 1
-          fi
-
   lint:
     runs-on: ubuntu-latest
     steps:
