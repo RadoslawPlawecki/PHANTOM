@@ -38,7 +38,7 @@ dev = [
     "coverage[toml]>=7.16.1",
     "pre-commit>=4.0",
     "mypy>=1.14",
-    "codespell>=2.4",
+    "codespell>=2.4.3",
 ]
 
 [tool.setuptools.packages.find]
