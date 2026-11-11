@@ -23,6 +23,7 @@ class FeatureCollectionPrompts:
                 "4) Extract features",
                 "5) Optimize features",
                 "6) Analyze diversity (healthy vs. allergy)",
+                "7) Summarize ORF functions",
                 "Back",
             ],
         ).ask()

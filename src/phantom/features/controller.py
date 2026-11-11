@@ -14,6 +14,7 @@ from phantom.features.extraction.extractor import FeatureExtractor
 from phantom.features.merging.concatenator import FeatureConcatenator
 from phantom.features.optimization.optimizer import FeatureOptimizer
 from phantom.features.preprocessing.preprocessor import FeaturePreprocessor
+from phantom.features.summary.function_summarizer import FunctionSummarizer
 
 
 class FeatureController:
@@ -41,6 +42,8 @@ class FeatureController:
                 self._optimize_features()
             elif action.startswith("6)"):
                 self._analyze_diversity()
+            elif action.startswith("7)"):
+                self._summarize_functions()
 
     def _import_features(self) -> None:
         importer = FeatureImporter(config_path=self.config_path)
@@ -95,6 +98,15 @@ class FeatureController:
         DiversityAnalyzer(version=version, config_mgr=self.config_mgr).run(
             out_dir, ratio_mode=ratio_mode
         )
+
+    def _summarize_functions(self):
+        existing_versions = self.config_mgr.get_existing_versions()
+        if not existing_versions:
+            print("[ERROR] No feature versions available to summarize.")
+            return
+        version = FeatureCollectionPrompts.ask_existing_version(existing_versions)
+        if version:
+            FunctionSummarizer(version=version, config_mgr=self.config_mgr).run()
 
 
 if __name__ == "__main__":

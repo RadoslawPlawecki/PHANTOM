@@ -60,6 +60,19 @@ type = "directory"
 description = "CheckV masks generated to filter sequences based on completeness and contamination criteria."
 
 
+[phanotate]
+path = "data/phanotate/orfs"
+type = "directory"
+description = "Open reading frames called from putative viral genomes using PHANOTATE."
+orf_fna = "*_PHA_ORFs.fna"
+
+
+[functions]
+path = "data/functions"
+type = "directory"
+description = "Called ORFs grouped by predicted functional category, with per-ORF genus and host annotations."
+
+
 [features]
 path = "data/features"
 type = "directory"
