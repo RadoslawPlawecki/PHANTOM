@@ -14,6 +14,7 @@ from phantom.classification.analytics.saver import ExperimentSaver
 from phantom.classification.analytics.visualizer import Visualizer
 from phantom.classification.data.data_aligner import DataAligner
 from phantom.classification.data.data_loader import DataLoader
+from phantom.classification.data.labeling import Labeling
 from phantom.classification.data.preprocessor import NearZeroVarianceFilter
 from phantom.classification.ml.evaluator import EvaluatorUl
 
@@ -49,7 +50,7 @@ class UnsupervisedClassifier:
         self.logger = Logger.setup_logger(log_dir=exp_dir, log_filename=f"{timestamp}.log")
         self.saver = ExperimentSaver(exp_dir=exp_dir)
         self.logger.info("=== UNSUPERVISED LEARNING ===")
-        self.saver.save_metadata(vars(self.config))
+        self.saver.save_metadata({**vars(self.config), "labels": Labeling.default().provenance()})
 
     def _load(self):
         paths = {

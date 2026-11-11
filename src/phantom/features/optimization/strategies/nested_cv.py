@@ -80,7 +80,8 @@ def run_nested_cv(
     df = filter_accessions(df)
     patient_ids_all = derive_patient_id(df["Accession"])
     unique_patients = pd.Index(patient_ids_all.unique())
-    unique_labels = Labeling.derive_label(pd.Series(unique_patients))
+    labeling = Labeling.default()
+    unique_labels = labeling.derive_label(pd.Series(unique_patients))
 
     outer_cv = RepeatedStratifiedKFold(
         n_splits=outer_folds, n_repeats=outer_repeats, random_state=random_state
@@ -129,8 +130,8 @@ def run_nested_cv(
             skipped_folds.append({"fold_id": fold_id, "reason": "empty test feature matrix"})
             continue
 
-        y_train = Labeling.derive_label(X_train_df["id"])
-        y_test = Labeling.derive_label(X_test_df["id"])
+        y_train = labeling.derive_label(X_train_df["id"])
+        y_test = labeling.derive_label(X_test_df["id"])
         if len(np.unique(y_train)) <= 1:
             skipped_folds.append({"fold_id": fold_id, "reason": "single-class train fold"})
             continue

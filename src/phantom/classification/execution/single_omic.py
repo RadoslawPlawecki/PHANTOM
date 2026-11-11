@@ -10,6 +10,7 @@ from phantom.classification.analytics.reporter import ReportFormatter
 from phantom.classification.analytics.saver import ExperimentSaver
 from phantom.classification.analytics.visualizer import Visualizer
 from phantom.classification.data.data_loader import DataLoader
+from phantom.classification.data.labeling import Labeling
 from phantom.classification.data.preprocessor import NearZeroVarianceFilter
 from phantom.classification.ml.evaluator import EvaluatorSl
 from phantom.classification.ml.models import (
@@ -43,7 +44,7 @@ class SingleOmicClassifier:
     def _setup(self):
         _exp_dir, self.logger, self.saver = self._create_experiment()
         self.logger.info("=== SINGLE-OMIC ALLERGY CLASSIFIER ===")
-        self.saver.save_metadata(vars(self.config))
+        self.saver.save_metadata({**vars(self.config), "labels": Labeling.default().provenance()})
 
     def _create_experiment(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

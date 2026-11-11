@@ -13,9 +13,10 @@ from phantom.classification.data.labeling import Labeling
 
 
 class DataLoader:
-    def __init__(self, input_path: str, logger=None):
+    def __init__(self, input_path: str, logger=None, labeling: Labeling | None = None):
         self.input_path = Path(input_path)
         self.logger = logger
+        self.labeling = labeling
         if not self.input_path.is_file():
             raise FileNotFoundError(f"Input file not found: {self.input_path}")
 
@@ -29,7 +30,7 @@ class DataLoader:
             sep = ";"
         df = pd.read_csv(self.input_path, sep=sep)
         sample_ids = df["id"].copy()
-        y = Labeling.derive_label(sample_ids)
+        y = (self.labeling or Labeling.default()).derive_label(sample_ids)
         X = df.drop(columns=["id", "label"], errors="ignore")
         X = X.apply(pd.to_numeric, errors="coerce")
         self._log_load(X=X, y=y)

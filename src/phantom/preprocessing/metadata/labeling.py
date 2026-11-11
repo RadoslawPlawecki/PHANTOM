@@ -56,6 +56,29 @@ class ExternalCSVLabeler(LabelingStrategy):
         self.label_col = label_col
 
     def assign_labels(self, df: pd.DataFrame) -> dict[str, int]:
+        """
+        Every sample must get an explicit label from the external CSV -- a
+        sample missing from it is an error, never silently class 0.
+        """
         external_df = pd.read_csv(self.csv_path)
-        merged = df.merge(external_df, on=self.join_key, how="left")
-        return dict(zip(merged["id"], merged[self.label_col].fillna(0).astype(int), strict=True))
+        for name, frame in (("metadata", df), (str(self.csv_path), external_df)):
+            if self.join_key not in frame.columns:
+                raise ValueError(f"Join column '{self.join_key}' not found in {name}.")
+        if self.label_col not in external_df.columns:
+            raise ValueError(f"Label column '{self.label_col}' not found in {self.csv_path}.")
+        dupes = external_df[self.join_key][external_df[self.join_key].duplicated()]
+        if not dupes.empty:
+            raise ValueError(
+                f"Duplicate '{self.join_key}' values in {self.csv_path}: {dupes.unique().tolist()}"
+            )
+        merged = df.merge(
+            external_df[[self.join_key, self.label_col]], on=self.join_key, how="left"
+        )
+        missing = merged.loc[merged[self.label_col].isna(), "id"].tolist()
+        if missing:
+            raise ValueError(f"No label in {self.csv_path} for sample id(s): {missing}")
+        labels = merged[self.label_col]
+        invalid = set(labels.unique()) - {0, 1}
+        if invalid:
+            raise ValueError(f"Labels must be 0 or 1, got {sorted(invalid)}.")
+        return dict(zip(merged["id"], labels.astype(int), strict=True))

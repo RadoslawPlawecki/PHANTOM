@@ -36,6 +36,7 @@ viral_fna = "final-viral-combined.fa"
 [genomes]
 path = "data/genomes"
 type = "directory"
+metadata_path = "data/genomes/genome_metadata.csv"
 
 [checkv]
 path = "data/checkv"

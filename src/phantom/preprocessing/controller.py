@@ -24,10 +24,7 @@ from phantom.preprocessing.metadata.scanner import scan_metadata
 class PreprocessingController:
     def __init__(self):
         self.config = ConfigLoader().load()
-        meta_path = self.config.get("genomes", {}).get(
-            "metadata_path", "data/genomes/genome_metadata.csv"
-        )
-        self.meta_mapper = MetadataManager(ConfigLoader.resolve_data_path(meta_path))
+        self.meta_mapper = MetadataManager(MetadataManager.path_from_config(self.config))
 
     def run(self):
         while True:
@@ -84,7 +81,11 @@ class PreprocessingController:
         if not strategy:
             print("\n[ERROR] Labeling was aborted.")
             return pd.DataFrame()
-        labels_map = strategy.assign_labels(df)
+        try:
+            labels_map = strategy.assign_labels(df)
+        except (ValueError, OSError) as e:
+            print(f"\n[ERROR] Labeling failed: {e}")
+            return pd.DataFrame()
         df_labels = pd.DataFrame(list(labels_map.items()), columns=["id", "label"])
         positives = df_labels["label"].sum() if not df_labels.empty else 0
         print(
@@ -98,6 +99,7 @@ class PreprocessingController:
         if not targets:
             return
         dfs_to_merge = []
+        overwrite_cols: set[str] = set()
         if any(t.startswith("1)") for t in targets):
             if pre_collected_df is not None and not pre_collected_df.empty:
                 dfs_to_merge.append(pre_collected_df)
@@ -115,9 +117,21 @@ class PreprocessingController:
             if base_df.empty:
                 print("[ERROR] Cannot label: No samples found in registry.")
             else:
-                labels = self._label_genomes(base_df)
-                if not labels.empty:
-                    dfs_to_merge.append(labels)
+                existing = self.meta_mapper.load()
+                proceed = True
+                if "label" in existing.columns:
+                    current = existing["label"].dropna()
+                    proceed = bool(
+                        PreprocessingPrompts.ask_overwrite_labels(len(current), int(current.sum()))
+                    )
+                    if proceed:
+                        overwrite_cols.add("label")
+                    else:
+                        print("[INFO] Keeping existing labels.")
+                if proceed:
+                    labels = self._label_genomes(base_df)
+                    if not labels.empty:
+                        dfs_to_merge.append(labels)
         needs_scan = any(t.startswith(prefix) for prefix in ("3)", "4)", "5)") for t in targets)
         if needs_scan:
             print(
@@ -148,7 +162,9 @@ class PreprocessingController:
         for df_part in dfs_to_merge:
             if not df_part.empty and "id" in df_part.columns:
                 try:
-                    self.meta_mapper.add_metadata_columns(df_part)
+                    self.meta_mapper.add_metadata_columns(
+                        df_part, overwrite=overwrite_cols & set(df_part.columns)
+                    )
                 except ValueError as e:
                     print(f"[ERROR] {e}")
         if dfs_to_merge:

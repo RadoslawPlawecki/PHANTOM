@@ -38,7 +38,7 @@ class DiversityAnalyzer:
             vtool = preprocessed_file.stem.split("_")[0]
             df = pd.read_csv(preprocessed_file, sep=";")
             df["id"] = derive_patient_id(df["Accession"])
-            df["label"] = Labeling.derive_label(df["Accession"])
+            df["label"] = Labeling.default().derive_label(df["Accession"])
             loaded[vtool] = df
         return loaded
 
@@ -173,6 +173,7 @@ class DiversityAnalyzer:
                 "version": self.version,
                 "tools": ["phagcn", "cherry"],
                 "ratio_mode": ratio_mode,
+                "labels": Labeling.default().provenance(),
             }
         )
 

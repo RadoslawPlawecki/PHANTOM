@@ -71,3 +71,10 @@ class PreprocessingPrompts:
     @staticmethod
     def ask_external_csv() -> str:
         return questionary.text("Path to external CSV file:").ask()
+
+    @staticmethod
+    def ask_overwrite_labels(n_labeled: int, n_positive: int) -> bool:
+        return questionary.confirm(
+            f"Labels already exist ({n_labeled} samples, {n_positive} positives). Overwrite them?",
+            default=False,
+        ).ask()

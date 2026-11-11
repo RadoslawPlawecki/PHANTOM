@@ -52,7 +52,7 @@ def run_permutation_test(
     df = filter_accessions(df)
     patient_ids_all = derive_patient_id(df["Accession"])
     unique_patients = pd.Index(patient_ids_all.unique())
-    true_labels = Labeling.derive_label(pd.Series(unique_patients))
+    true_labels = Labeling.default().derive_label(pd.Series(unique_patients))
 
     if observed_score is None:
         observed_study = search_fn(

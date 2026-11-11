@@ -45,6 +45,7 @@ viral_fna = "final-viral-combined.fa"
 path = "data/genomes"
 type = "directory"
 description = "Putative viral genomes identified by viral identification tools."
+metadata_path = "data/genomes/genome_metadata.csv"
 
 
 [checkv]

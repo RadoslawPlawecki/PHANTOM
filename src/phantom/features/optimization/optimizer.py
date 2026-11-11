@@ -10,6 +10,7 @@ import os
 
 import pandas as pd
 
+from phantom.classification.data.labeling import Labeling
 from phantom.cli.features import FeatureOptimizationPrompts
 from phantom.config.features import FeatureConfigManager
 
@@ -66,6 +67,7 @@ class FeatureOptimizer:
                 "top_k_features": top_k_features,
                 "n_permutations": n_permutations,
                 "permutation_trials": permutation_trials,
+                "labels": Labeling.default().provenance(),
             }
         )
 
