@@ -12,12 +12,28 @@ from phantom.config.loader import ConfigLoader
 
 QUALITY_COLS = ["contig_id", "provirus", "completeness", "contamination"]
 
+# Default MIUViG-style quality tiers: medium >= 50 %, high >= 75 % completeness,
+# both with < 10 % contamination.
+MEDIUM_COMPLETENESS = 50.0
+HIGH_COMPLETENESS = 75.0
+MAX_CONTAMINATION = 10.0
+
 
 class CheckvMaskGenerator:
-    def __init__(self, config: dict):
+    def __init__(
+        self,
+        config: dict,
+        medium_completeness: float = MEDIUM_COMPLETENESS,
+        high_completeness: float = HIGH_COMPLETENESS,
+        max_contamination: float = MAX_CONTAMINATION,
+    ):
         resolve = ConfigLoader.resolve_data_path
         self.checkv_dir = resolve(config.get("checkv", {}).get("path", "data/checkv"))
         self.masks_dir = resolve(config.get("masks", {}).get("path", "data/masks"))
+        self.medium = medium_completeness
+        self.high = high_completeness
+        self.max_contamination = max_contamination
+        self.written: list[Path] = []
 
     def run(self) -> int:
         """
@@ -64,13 +80,16 @@ class CheckvMaskGenerator:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         no_provirus = merged["provirus"] == "No"
-        low_contamination = merged["contamination"] < 10
+        low_contamination = merged["contamination"] < self.max_contamination
+        medium = merged["completeness"] >= self.medium
+        high = merged["completeness"] >= self.high
         masks = {
-            "MQ_vMAGs.tsv": no_provirus & (merged["completeness"] >= 50) & low_contamination,
-            "HQ_vMAGs.tsv": no_provirus & (merged["completeness"] >= 75) & low_contamination,
-            "MQ_provMAGs.tsv": (merged["completeness"] >= 50) & low_contamination,
-            "HQ_provMAGs.tsv": (merged["completeness"] >= 75) & low_contamination,
+            "MQ_vMAGs.tsv": no_provirus & medium & low_contamination,
+            "HQ_vMAGs.tsv": no_provirus & high & low_contamination,
+            "MQ_provMAGs.tsv": medium & low_contamination,
+            "HQ_provMAGs.tsv": high & low_contamination,
         }
         for filename, mask in masks.items():
             merged.loc[mask].to_csv(out_dir / filename, sep="\t", index=False)
+        self.written.append(out_dir)
         print(f"[INFO] Wrote {len(masks)} mask file(s) to {out_dir}")
