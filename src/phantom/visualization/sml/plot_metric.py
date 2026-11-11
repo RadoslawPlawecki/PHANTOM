@@ -9,7 +9,7 @@ import os
 
 
 def plot_metrics(df_long, model_name, method_name, savefig=True):
-    from ..plots_formatting import use_latex
+    from phantom.config.plotting import use_latex
     use_latex()
     metrics = ["auc", "balanced_accuracy", "f1", "precision", "recall", "specificity", "gmean", "nvp", "pr_auc", "mcc"]
     metrics_dict = {

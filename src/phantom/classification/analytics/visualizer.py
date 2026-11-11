@@ -5,7 +5,7 @@
 import matplotlib.pyplot as plt
 from sklearn.metrics import auc, roc_curve
 
-from phantom.visualization.plots_formatting import use_latex
+from phantom.config.plotting import use_latex
 
 
 class Visualizer:

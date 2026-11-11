@@ -2,7 +2,18 @@
 Contains CLI prompts used during the raw data preprocessing workflow.
 """
 
+from pathlib import Path
+
 import questionary
+
+from phantom.config.loader import ConfigLoader
+
+# Plot name (as MetadataVisualizer knows it) -> menu label.
+PLOT_LABELS = {
+    "checkv_quality": "CheckV genome quality per sample",
+    "runtimes": "Tool runtime distribution",
+    "size_vs_runtime": "Assembly size vs. runtime",
+}
 
 
 class PreprocessingPrompts:
@@ -14,9 +25,30 @@ class PreprocessingPrompts:
                 "1) Collect putative viral genomes",
                 "2) Gather metadata",
                 "3) Generate CheckV masks",
+                "4) Visualize metadata",
                 "Back",
             ],
         ).ask()
+
+    @staticmethod
+    def ask_plots(available: list) -> list:
+        choices = [
+            questionary.Choice(PLOT_LABELS[name], value=name, checked=True) for name in available
+        ]
+        return questionary.checkbox(
+            "Select metadata plots to render (Space to select, Enter to confirm):",
+            choices=choices,
+        ).ask()
+
+    @staticmethod
+    def ask_plot_out_dir() -> Path | None:
+        default_dir = ConfigLoader.resolve_data_path("data/plots/metadata")
+        answer = questionary.path(
+            "Output directory for plots:",
+            default=str(default_dir),
+            only_directories=True,
+        ).ask()
+        return Path(answer) if answer else None
 
     @staticmethod
     def ask_metadata_targets() -> list:

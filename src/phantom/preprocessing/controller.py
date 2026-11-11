@@ -19,6 +19,7 @@ from phantom.preprocessing.metadata.labeling import (
 )
 from phantom.preprocessing.metadata.mapping import MetadataManager
 from phantom.preprocessing.metadata.scanner import scan_metadata
+from phantom.preprocessing.metadata.visualizer import MetadataVisualizer
 
 
 class PreprocessingController:
@@ -41,6 +42,8 @@ class PreprocessingController:
                 self._gather_metadata()
             elif action.startswith("3)"):
                 self._generate_checkv_masks()
+            elif action.startswith("4)"):
+                self._visualize_metadata()
 
     def _collect_genomes(self) -> pd.DataFrame:
         collector = GenomeCollector(self.config, self.meta_mapper)
@@ -177,6 +180,29 @@ class PreprocessingController:
             print(f"\n[SUCCESS] Generated masks for {processed} tool(s).")
         else:
             print("\n[ERROR] No CheckV results found to generate masks from.")
+
+    def _visualize_metadata(self):
+        df = self.meta_mapper.load()
+        if df.empty:
+            print("\n[ERROR] No metadata found. Gather metadata first.")
+            return
+        available = MetadataVisualizer.available_plots(df)
+        if not available:
+            print(
+                "\n[ERROR] Metadata has no columns to plot. Gather runtimes, "
+                "CheckV stats or file sizes first."
+            )
+            return
+        selected = PreprocessingPrompts.ask_plots(available)
+        if not selected:
+            return
+        out_dir = PreprocessingPrompts.ask_plot_out_dir()
+        if out_dir is None:
+            return
+        written = MetadataVisualizer.render(df, selected, out_dir)
+        print(f"\n[SUCCESS] Wrote {len(written)} plot(s):")
+        for path in written:
+            print(f"  - {path}")
 
 
 if __name__ == "__main__":

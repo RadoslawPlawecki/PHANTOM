@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from phantom.visualization.plots_formatting import use_latex
+from phantom.config.plotting import use_latex
 
 GROUP_COLORS = {0: "#a1d99b", 1: "#238b45"}
 GROUP_LABELS = {0: "Healthy", 1: "Allergy"}
