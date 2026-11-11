@@ -1,0 +1,7 @@
+# Created by Snakemake (--use-conda) when [envs].checkv is not set in config.toml.
+# Pinned to the version the published results were produced with.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - checkv=0.7.0

@@ -2,7 +2,7 @@
 Shared search engine for feature-engineering optimization (cherry, phagcn,
 phavip). Operates on raw-merged data rather than a canonical preprocessed
 file, since phavip's search varies the coverage/identity thresholds its own
-preprocessing applies (see _load_preprocessed). The CheckV mask is the one
+preprocessing applies (see load_masked). The CheckV mask is the one
 thing every tool gets uniformly -- applied right after loading, before any
 tool-specific preprocessing or search runs.
 
@@ -23,12 +23,6 @@ import pandas as pd
 from phantom.classification.ml.models import get_catboost_model, get_rf_model, get_xgb_model
 from phantom.classification.ml.optimizer import FeatureExtractionOptimizer
 from phantom.classification.ml.validators import LOOCVValidator, RepeatedCVValidator
-from phantom.cli.features import (
-    FeatureCollectionPrompts,
-    FeatureExtractionPrompts,
-    FeatureOptimizationPrompts,
-)
-from phantom.config.features import FeatureConfigManager
 from phantom.features.pipelines.matrix import build_taxonomy_matrix
 from phantom.features.pipelines.tools.cherry import CherryFeaturePipeline
 from phantom.features.pipelines.tools.phagcn import PhagcnFeaturePipeline
@@ -83,45 +77,15 @@ class RunConfig:
     smote: bool = False
 
 
-def _select_raw_merged_file(tool: str, config_mgr: FeatureConfigManager | None = None) -> Path:
-    config_mgr = config_mgr or FeatureConfigManager()
-    existing_versions = config_mgr.get_existing_versions()
-    if not existing_versions:
-        raise FileNotFoundError("No feature versions found in config.toml.")
-    version = FeatureCollectionPrompts.ask_existing_version(existing_versions)
-    if not version:
-        raise FileNotFoundError("No version selected.")
-    raw_merged_dir = config_mgr.get_stage_dir(version, "raw_merged") / tool
-    files = sorted(raw_merged_dir.glob("*.csv"))
-    if not files:
-        raise FileNotFoundError(f"No merged {tool} files found in {raw_merged_dir}")
-    selected = FeatureOptimizationPrompts.ask_file_choice(tool, files)
-    if not selected:
-        raise FileNotFoundError("No file selected.")
-    return selected
-
-
-def _load_preprocessed(
-    tool: str, config_mgr: FeatureConfigManager | None = None
-) -> tuple[Path, pd.DataFrame]:
+def load_masked(tool: str, path: Path, mask_path: Path | None) -> pd.DataFrame:
     """
     Loads a tool's raw-merged file, applies the CheckV mask, then whatever
-    preprocessing isn't itself part of the search space -- so every
-    strategy starts from the same masked input.
-
-    cherry/phagcn have no tunable preprocessing knobs, so preprocess() runs
-    once here. phavip's min_coverage/min_pident ARE search params, so only
-    Category is precomputed; preprocess() runs per-config in
-    apply_phavip_config, on the masked data.
+    preprocessing is not itself part of the search space -- so every
+    strategy starts from the same masked input. cherry/phagcn have no
+    tunable preprocessing, so preprocess() runs once here; phavip's
+    min_coverage/min_pident ARE search parameters, so only its Category
+    column is precomputed and preprocess() runs per config.
     """
-    path = _select_raw_merged_file(tool, config_mgr)
-    mask_path = FeatureExtractionPrompts().ask_mask_file(path)
-    return path, load_masked(tool, path, mask_path)
-
-
-def load_masked(tool: str, path: Path, mask_path: Path | None) -> pd.DataFrame:
-    """The non-interactive core of _load_preprocessed: load ``path``, apply
-    the CheckV mask, then the tool's search-independent preprocessing."""
     df = load_file(path)
     df = apply_mask(df, mask_path)
     if tool == "cherry":

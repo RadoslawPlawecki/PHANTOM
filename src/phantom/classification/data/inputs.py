@@ -1,7 +1,6 @@
 """
-Locates classification inputs -- the extracted feature matrix of a given
-modality and virus-identification tool -- without prompting, so both the
-run-file stages and the (legacy) interactive menu resolve files the same way.
+Locates classification inputs: the extracted feature matrix of a given
+modality and virus-identification tool.
 """
 
 from pathlib import Path

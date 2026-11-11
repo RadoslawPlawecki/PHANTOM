@@ -1,5 +1,5 @@
 """
-Classification stages -- replace the interactive Classifier menu.
+Classification stages.
 
 ``classification.single``  one supervised classifier per (modality, vtool, model)
 ``classification.multi``   early/late fusion of the comp/host/func modalities
@@ -222,7 +222,7 @@ class MultiOmic(Stage):
         comp, host, func = (
             str(_feature_file(ctx, p.version, m, p.vtool)) for m in FUSED_MODALITIES
         )
-        # The same values the menu passed: no weight tuning -> (False, 0).
+        # No weight tuning is (False, 0) for the executor.
         tune = p.fusion == "late" and p.optimize_weights
         classifier = MultiOmicClassifier(
             MultiOmicConfig(

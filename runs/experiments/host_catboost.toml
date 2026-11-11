@@ -1,6 +1,6 @@
 # Single-omic classification of the bacterial-host modality, one job per
-# virus-identification tool. Run:  phantom run runs/examples/host_catboost.toml
-# Try a variant without editing:   phantom plan runs/examples/host_catboost.toml --set model=rf
+# virus-identification tool. Run:  phantom run runs/experiments/host_catboost.toml
+# Try a variant without editing:   phantom plan runs/experiments/host_catboost.toml --set model=rf
 
 [run]
 name = "host_catboost"
@@ -8,7 +8,7 @@ description = "Bacterial host prediction, all virus-identification tools, CatBoo
 
 [[steps]]
 stage = "classification.single"
-version = "3.0"
+version = "1.0"
 modality = "host"
 vtool = ["geN", "VIB", "VS2"]
 model = "catboost"

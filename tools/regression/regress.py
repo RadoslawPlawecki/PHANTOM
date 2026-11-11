@@ -5,11 +5,10 @@ Legacy-vs-new regression checks for the menu -> run-file migration.
     python tools/regression/regress.py baseline CASE|PREFIX ... [--repeat]
     python tools/regression/regress.py check CASE|PREFIX ...
 
-``baseline`` runs the legacy (menu) path with scripted answers and records a
-manifest of its outputs under ``<workspace>/.phantom/regression/baselines``;
-``--repeat`` runs it twice first and refuses to record a nondeterministic
-baseline. ``check`` runs the new ``phantom`` stage for the same case and
-fails unless every output file is byte-identical. A PREFIX such as
+``check`` runs a case's ``phantom`` step and fails unless every output
+matches the recorded baseline (``<workspace>/.phantom/regression/baselines``).
+``baseline`` records the current output as the new reference (after an
+intended change of results); ``--repeat`` refuses a nondeterministic one. A PREFIX such as
 ``features.`` selects every case whose name starts with it. See harness.py.
 """
 

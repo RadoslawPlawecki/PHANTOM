@@ -1,0 +1,11 @@
+# Install the external tools (conda environments + databases) and check that
+# each one starts. Safe to rerun: what is installed is kept.
+#   phantom run runs/setup.toml
+
+[run]
+name = "setup_tools"
+
+[[steps]]
+stage = "tools.setup"
+tools = ["genomad", "vibrant", "virsorter2", "checkv", "phanotate", "bedtools", "seqkit", "phabox2"]
+# dry_run = true   # print what would be installed/downloaded, change nothing

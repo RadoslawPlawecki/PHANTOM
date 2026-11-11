@@ -1,0 +1,400 @@
+"""
+External bioinformatics tools of the PHANTOM pipeline, as one Snakemake
+workflow -- replaces scripts/run_*.sh. Driven by `phantom run` (stages
+tools.*), which passes everything machine-specific through --configfile,
+built from config.toml: absolute paths, databases, conda environments and
+thread counts. Nothing here is hardcoded to one machine.
+
+    MEGAHIT assemblies --> genomad / vibrant / virsorter2          (per sample)
+    genomes/<tool>/*.fna --> checkv, phabox2 cherry|phagcn, phanotate
+    phanotate ORFs --> phabox2 phavip
+
+Each shell command is the one the corresponding scripts/run_*.sh ran.
+Target rules (all_<tool>) select what to build; Snakemake skips outputs that
+are up to date and runs independent samples in parallel (--cores).
+
+Installing from scratch: a tool without an [envs] entry in config.toml runs
+in a conda environment Snakemake creates from envs/<tool>.yaml (pinned
+versions); setup_<tool> rules download a missing database and check that the
+tool starts. VIBRANT/PHANOTATE use a local checkout only if [software] names
+one, else the bioconda package's command.
+"""
+
+import glob
+from pathlib import Path
+
+P = config["paths"]  # absolute directories
+DB = config["databases"]  # absolute database paths
+ENV = config["envs"]  # conda environment name per tool
+T = config["threads"]
+SOFT = config["software"]  # absolute paths of local tool checkouts
+TOOLS = config["tools"]  # abbreviation -> tool name, e.g. geN -> genomad
+TAG = config["tags"]  # phabox2 task -> filename tag, e.g. cherry -> CHR
+SAMPLES = config.get("samples")  # None = every sample found
+VTOOLS = config.get("vtools") or list(TOOLS.values())
+ABBR = {name: abbr for abbr, name in TOOLS.items()}
+SETUP = config.get("setup_dir", ".")  # markers of finished setup_<tool> checks
+PHABOX2_DB_URL = "https://github.com/KennthShang/PhaBOX/releases/download/v2/phabox_db_v2_2.zip"
+
+
+def env(tool):
+    """An existing environment named in [envs], else the pinned envs/<tool>.yaml."""
+    return ENV.get(tool) or f"envs/{tool}.yaml"
+
+
+VIBRANT = f"python3 {SOFT['vibrant']}/VIBRANT_run.py" if SOFT.get("vibrant") else "VIBRANT_run.py"
+PHANOTATE = f"{SOFT['phanotate']}/phanotate.py" if SOFT.get("phanotate") else "phanotate.py"
+
+wildcard_constraints:
+    sample=r"S\d+",
+    vtool="|".join(TOOLS.values()),
+    base=r"S\d+_[A-Za-z0-9]+",
+    task="cherry|phagcn",
+
+
+def keep(sample):
+    return SAMPLES is None or sample in SAMPLES
+
+
+def assemblies():
+    """sample -> MEGAHIT assembly (001_S1_assembly.contigs.fa -> S1)."""
+    found = {}
+    for f in sorted(glob.glob(f"{P['megahit']}/*.fa")):
+        sample = Path(f).name.split("_")[1]
+        if keep(sample):
+            found[sample] = f
+    return found
+
+
+def genome_bases(vtool):
+    """Genome registry bases (S1_geN) of one identification tool."""
+    bases = [Path(f).stem for f in sorted(glob.glob(f"{P['genomes']}/{vtool}/*.fna"))]
+    return [b for b in bases if keep(b.split("_")[0])]
+
+
+# --- target rules --------------------------------------------------------------
+
+
+rule all_genomad:
+    input:
+        lambda wc: [f"{P['genomad']}/{s}_{ABBR.get('genomad', 'genomad')}" for s in assemblies()],
+
+
+rule all_vibrant:
+    input:
+        lambda wc: [f"{P['vibrant']}/{s}_{ABBR.get('vibrant', 'vibrant')}" for s in assemblies()],
+
+
+rule all_virsorter2:
+    input:
+        lambda wc: [f"{P['virsorter2']}/{s}_{ABBR.get('virsorter2', 'virsorter2')}" for s in assemblies()],
+
+
+rule all_checkv:
+    input:
+        lambda wc: [f"{P['checkv']}/{v}/{b}_ChV" for v in VTOOLS for b in genome_bases(v)],
+
+
+rule all_phanotate:
+    input:
+        lambda wc: [
+            f"{P['phanotate_proteins']}/{v}/{b}_PHA_PROT.faa"
+            for v in VTOOLS
+            for b in genome_bases(v)
+        ],
+
+
+rule all_phabox2_cherry:
+    input:
+        lambda wc: [
+            f"{P['phabox2']}/cherry/{v}/{b}_{TAG.get('cherry', 'cherry')}.tsv"
+            for v in VTOOLS
+            for b in genome_bases(v)
+        ],
+
+
+rule all_phabox2_phagcn:
+    input:
+        lambda wc: [
+            f"{P['phabox2']}/phagcn/{v}/{b}_{TAG.get('phagcn', 'phagcn')}.tsv"
+            for v in VTOOLS
+            for b in genome_bases(v)
+        ],
+
+
+rule all_phabox2_phavip:
+    input:
+        lambda wc: [
+            f"{P['phabox2']}/phavip/{v}/{b}_PHA_ORFs_{TAG.get('phavip', 'phavip')}.tsv"
+            for v in VTOOLS
+            for b in genome_bases(v)
+        ],
+
+
+# --- virus identification (scripts/run_genomad|vibrant|virsorter2.sh) ---------
+
+
+rule genomad:
+    input:
+        lambda wc: assemblies()[wc.sample],
+    output:
+        directory(f"{P['genomad']}/{{sample}}_{ABBR.get('genomad', 'genomad')}"),
+    params:
+        db=DB.get("genomad", ""),
+    threads: T.get("genomad", 1)
+    conda:
+        env("genomad")
+    shell:
+        "genomad end-to-end --cleanup --splits 8 {input} {output} {params.db}"
+
+
+rule vibrant:
+    input:
+        lambda wc: assemblies()[wc.sample],
+    output:
+        directory(f"{P['vibrant']}/{{sample}}_{ABBR.get('vibrant', 'vibrant')}"),
+    params:
+        vibrant=VIBRANT,
+    threads: T.get("vibrant", 1)
+    conda:
+        env("vibrant")
+    shell:
+        "{params.vibrant} -i {input} -t {threads} -folder {output}"
+
+
+rule virsorter2:
+    input:
+        lambda wc: assemblies()[wc.sample],
+    output:
+        directory(f"{P['virsorter2']}/{{sample}}_{ABBR.get('virsorter2', 'virsorter2')}"),
+    threads: T.get("virsorter2", 1)
+    conda:
+        env("virsorter2")
+    shell:
+        "virsorter run -w {output} -i {input} --provirus-off --max-orf-per-seq 20 all"
+
+
+# --- genome quality (scripts/run_checkv.sh) ------------------------------------
+
+
+rule checkv:
+    input:
+        f"{P['genomes']}/{{vtool}}/{{base}}.fna",
+    output:
+        directory(f"{P['checkv']}/{{vtool}}/{{base}}_ChV"),
+    params:
+        db=DB.get("checkv", ""),
+    threads: T.get("checkv", 1)
+    conda:
+        env("checkv")
+    shell:
+        "checkv end_to_end {input} {output} -d {params.db} -t {threads}"
+
+
+# --- ORF calling (scripts/run_phanotate.sh) ------------------------------------
+
+
+rule phanotate_genes:
+    input:
+        f"{P['genomes']}/{{vtool}}/{{base}}.fna",
+    output:
+        f"{P['phanotate_genes']}/{{vtool}}/{{base}}_PHA.gff",
+    params:
+        phanotate=PHANOTATE,
+    conda:
+        env("phanotate")
+    shell:
+        "{params.phanotate} {input} > {output}"
+
+
+rule phanotate_bed:
+    input:
+        f"{P['phanotate_genes']}/{{vtool}}/{{base}}_PHA.gff",
+    output:
+        f"{P['phanotate_bed']}/{{vtool}}/{{base}}_PHA.bed",
+    shell:
+        r"""
+        awk 'BEGIN{{OFS="\t"}}
+        !/^#/ {{
+            start=$1; end=$2; strand=$3; chrom=$4
+            if (start ~ /^[0-9]+$/ && end ~ /^[0-9]+$/) {{
+                if (start < end) {{ print chrom, start-1, end, ".", ".", strand }}
+                else {{ print chrom, end-1, start, ".", ".", strand }}
+            }}
+        }}' {input} > {output}
+        """
+
+
+rule phanotate_orfs:
+    input:
+        genome=f"{P['genomes']}/{{vtool}}/{{base}}.fna",
+        bed=f"{P['phanotate_bed']}/{{vtool}}/{{base}}_PHA.bed",
+    output:
+        f"{P['phanotate_orfs']}/{{vtool}}/{{base}}_PHA_ORFs.fna",
+    conda:
+        env("bedtools")
+    shell:
+        "bedtools getfasta -fi {input.genome} -bed {input.bed} -fo {output} -s"
+
+
+rule phanotate_proteins:
+    input:
+        f"{P['phanotate_orfs']}/{{vtool}}/{{base}}_PHA_ORFs.fna",
+    output:
+        f"{P['phanotate_proteins']}/{{vtool}}/{{base}}_PHA_PROT.faa",
+    conda:
+        env("seqkit")
+    shell:
+        "seqkit translate {input} > {output}"
+
+
+# --- PhaBOX2 (scripts/run_cherry|phagcn|phavip.sh) -----------------------------
+# PhaBOX2 writes a whole working directory; only the prediction table is kept.
+
+
+rule phabox2_genome_task:
+    input:
+        f"{P['genomes']}/{{vtool}}/{{base}}.fna",
+    output:
+        f"{P['phabox2']}/{{task}}/{{vtool}}/{{base}}_{{tag}}.tsv",
+    wildcard_constraints:
+        tag="|".join([TAG.get("cherry", "cherry"), TAG.get("phagcn", "phagcn")]),
+    params:
+        db=DB.get("phabox2", ""),
+        work=lambda wc: f"{P['phabox2']}/{wc.task}/{wc.vtool}/{wc.base}_{wc.tag}",
+    threads: T.get("phabox2", 1)
+    conda:
+        env("phabox2")
+    shell:
+        "rm -rf {params.work} && "
+        "phabox2 --task {wildcards.task} --dbdir {params.db} --outpth {params.work} "
+        "--contigs {input} --threads {threads} && "
+        "mv {params.work}/final_prediction/{wildcards.task}_prediction.tsv {output} && "
+        "rm -rf {params.work}"
+
+
+rule phabox2_phavip:
+    input:
+        f"{P['phanotate_orfs']}/{{vtool}}/{{base}}_PHA_ORFs.fna",
+    output:
+        f"{P['phabox2']}/phavip/{{vtool}}/{{base}}_PHA_ORFs_{TAG.get('phavip', 'phavip')}.tsv",
+    params:
+        db=DB.get("phabox2", ""),
+        work=lambda wc: f"{P['phabox2']}/phavip/{wc.vtool}/{wc.base}_PHA_ORFs_{TAG.get('phavip', 'phavip')}",
+    threads: T.get("phabox2", 1)
+    conda:
+        env("phabox2")
+    shell:
+        "rm -rf {params.work} && "
+        "phabox2 --task phavip --dbdir {params.db} --outpth {params.work} "
+        "--contigs {input} --len 0 --threads {threads} && "
+        "mv {params.work}/final_prediction/phavip_supplementary/gene_annotation.tsv {output} && "
+        "rm -rf {params.work}"
+
+
+# --- installation (stage tools.setup) ------------------------------------------
+# Each setup_<tool> downloads the tool's database if its [databases] path does
+# not exist yet and records that the tool starts in its environment. The
+# database is deliberately NOT a declared output: Snakemake deletes a job's
+# existing outputs before running it, which would wipe a multi-GB database
+# that is already in place. Only the small <tool>.ok marker is an output.
+
+
+rule setup_genomad:
+    output:
+        ok=f"{SETUP}/genomad.ok",
+    params:
+        db=DB.get("genomad", ""),
+        tmp=f"{SETUP}/genomad.download",
+    conda:
+        env("genomad")
+    shell:
+        "if [ ! -d {params.db} ]; then rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+        "genomad download-database {params.tmp} && mv {params.tmp}/genomad_db {params.db} && "
+        "rm -rf {params.tmp}; fi && genomad --version > {output.ok}"
+
+
+rule setup_checkv:
+    output:
+        ok=f"{SETUP}/checkv.ok",
+    params:
+        db=DB.get("checkv", ""),
+        tmp=f"{SETUP}/checkv.download",
+    conda:
+        env("checkv")
+    shell:
+        "if [ ! -d {params.db} ]; then rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+        "checkv download_database {params.tmp} && mv {params.tmp}/checkv-db-v* {params.db} && "
+        "rm -rf {params.tmp}; fi && (checkv -h | head -1) > {output.ok}"
+
+
+rule setup_phabox2:
+    output:
+        ok=f"{SETUP}/phabox2.ok",
+    params:
+        db=DB.get("phabox2", ""),
+        tmp=f"{SETUP}/phabox2.download",
+        url=PHABOX2_DB_URL,
+    conda:
+        env("phabox2")
+    shell:
+        "if [ ! -d {params.db} ]; then rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+        "wget -q -O {params.tmp}/db.zip {params.url} && unzip -q {params.tmp}/db.zip -d {params.tmp} && "
+        "mv {params.tmp}/phabox_db_v2_2 {params.db} && rm -rf {params.tmp}; fi && "
+        "(phabox2 -h | head -1) > {output.ok}"
+
+
+rule setup_virsorter2:
+    # `virsorter setup` records the database location in VirSorter2's own
+    # configuration, so `virsorter run` needs no --db-dir afterwards.
+    output:
+        ok=f"{SETUP}/virsorter2.ok",
+    params:
+        db=DB.get("virsorter2", ""),
+    threads: 4
+    conda:
+        env("virsorter2")
+    shell:
+        "if [ -n '{params.db}' ] && [ ! -d '{params.db}' ]; then "
+        "virsorter setup -d {params.db} -j {threads}; fi && virsorter --version > {output.ok}"
+
+
+rule setup_vibrant:
+    # The bioconda package ships download-db.sh; a local checkout ([software].vibrant)
+    # is expected to have its databases set up already.
+    output:
+        ok=f"{SETUP}/vibrant.ok",
+    params:
+        checkout=SOFT.get("vibrant", ""),
+    conda:
+        env("vibrant")
+    shell:
+        "if [ -z '{params.checkout}' ]; then download-db.sh; fi && "
+        "({VIBRANT} --version || true) > {output.ok}"
+
+
+rule setup_phanotate:
+    output:
+        ok=f"{SETUP}/phanotate.ok",
+    conda:
+        env("phanotate")
+    shell:
+        "{PHANOTATE} -h > /dev/null && echo phanotate > {output.ok}"
+
+
+rule setup_bedtools:
+    output:
+        ok=f"{SETUP}/bedtools.ok",
+    conda:
+        env("bedtools")
+    shell:
+        "bedtools --version > {output.ok}"
+
+
+rule setup_seqkit:
+    output:
+        ok=f"{SETUP}/seqkit.ok",
+    conda:
+        env("seqkit")
+    shell:
+        "seqkit version > {output.ok}"

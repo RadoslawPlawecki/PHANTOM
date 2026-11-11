@@ -16,7 +16,6 @@ dependencies = [
     "numpy>=2.5.3",
     "optuna>=5.0.0",
     "pandas>=3.0.6",
-    "questionary>=2.1.1",
     "scikit_bio>=0.7.4",
     "scikit_learn>=1.9.1",
     "scipy>=1.18.0",
@@ -57,7 +56,6 @@ markers = [
     "ml: exercises classification/ml on a real estimator",
     "property: hypothesis-based",
     "integration: touches the filesystem / multi-component",
-    "controller: drives a *Controller with mocked prompts",
     "critical: covers a business-critical path (see tests/README.md)",
     "flaky: known non-deterministic, quarantined (non-blocking job)",
 ]
@@ -93,7 +91,6 @@ extend-exclude = [
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "S"]
 ignore = [
     "E501",    # line length is owned by `ruff format`; don't also lint it in strings/comments
-    "B008",    # function call in argument default (questionary idiom)
     "SIM108",  # ternary-instead-of-if — hurts readability as often as it helps
 ]
 

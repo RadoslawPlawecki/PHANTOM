@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from tests.stages.conftest import VERSION, jobs_for, run_stage, validate_stage
 
-import phantom.stages.optimization  # noqa: F401 -- registers the stages
+import phantom.stages  # noqa: F401 -- registers the stages
 from phantom.runner.loader import RunFileError
 
 # --- features.optimize --------------------------------------------------------------
@@ -22,13 +22,13 @@ def fake_optimize(ws, monkeypatch):
     pd.DataFrame({"Accession": ["S1_k1"]}).to_csv(merged / "geN_PGN_M.csv", sep=";", index=False)
     calls = []
 
-    def optimize(self, tool, mode, config, out_dir, source, df, **knobs):
+    def optimize(tool, mode, config, out_dir, source, df, **knobs):
         out_dir.mkdir(parents=True, exist_ok=True)
         calls.append(
             {"tool": tool, "mode": mode, "config": config, "out": out_dir, "src": source, **knobs}
         )
 
-    monkeypatch.setattr(opt.FeatureOptimizer, "optimize", optimize)
+    monkeypatch.setattr(opt, "run_optimization", optimize)
     monkeypatch.setattr(core, "load_masked", lambda tool, path, mask: pd.DataFrame())
     return calls
 

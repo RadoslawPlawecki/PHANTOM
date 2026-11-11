@@ -121,14 +121,13 @@ class Optimize(Stage):
         return [self._out_dir(p, ctx)]
 
     def run(self, p: OptimizeParams, ctx: RunContext) -> list[Path]:
-        from phantom.features.optimization.optimizer import FeatureOptimizer
+        from phantom.features.optimization.optimizer import run_optimization
         from phantom.features.optimization.search_core import RunConfig, load_masked
 
         source = self._merged_file(p, ctx)
         if source is None:  # checked before running; kept for type narrowing
             raise FileNotFoundError(f"no merged {p.tool} file for {p.vtool}")
-        # Knobs of strategies the mode does not run are recorded as None,
-        # exactly as the interactive menu did.
+        # Knobs of strategies the mode does not run are recorded as None.
         nested = p.mode in ("nested", "all")
         permutation = p.mode in ("permutation", "all")
         knobs = {
@@ -136,7 +135,7 @@ class Optimize(Stage):
             **{k: getattr(p, k) if permutation else None for k in PERMUTATION_KNOBS},
         }
         out_dir = self._out_dir(p, ctx)
-        FeatureOptimizer(config_mgr=ctx.config_mgr).optimize(
+        run_optimization(
             p.tool,
             p.mode,
             RunConfig(model=p.model, validator=p.validator, metric=p.metric, smote=p.smote),

@@ -1,0 +1,9 @@
+# Created by Snakemake (--use-conda) when [envs].phabox2 is not set in config.toml.
+# Pinned to the version the published results were produced with.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - phabox=2.2
+  - wget
+  - unzip

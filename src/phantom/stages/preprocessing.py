@@ -1,5 +1,5 @@
 """
-Preprocessing stages -- replace the interactive Preprocessing menu.
+Preprocessing stages: from the identification tools' output to labeled samples.
 
 ``preprocessing.collect``    viral contigs of each tool -> the genome registry (+ renaming metadata)
 ``preprocessing.metadata``   class labels and scraped statistics -> the metadata CSV
@@ -120,6 +120,12 @@ class Metadata(Stage):
             errors.append('labeling is given but "labeling" is not in targets')
         if not ctx.config.get("genomes", {}).get("metadata_path"):
             errors.append("config.toml is missing [genomes].metadata_path")
+        # A labels file is the user's input, not a pipeline output: check it
+        # up front, before hours of earlier steps run.
+        if p.labeling and p.labeling.get("strategy") == "csv" and p.labeling.get("path"):
+            path = ctx.resolve(p.labeling["path"])
+            if not path.is_file():
+                errors.append(f"labels file not found: {path} (columns: id,label)")
         return errors
 
     def check_inputs(self, p: MetadataParams, ctx: RunContext) -> list[str]:
@@ -131,10 +137,6 @@ class Metadata(Stage):
             errors.append(
                 f"{meta.path} already has labels; set overwrite_labels = true to replace them"
             )
-        if p.labeling and p.labeling.get("strategy") == "csv":
-            path = ctx.resolve(p.labeling.get("path", ""))
-            if not path.is_file():
-                errors.append(f"labeling CSV not found: {path}")
         return errors
 
     def label(self, p: MetadataParams) -> str:

@@ -2,12 +2,9 @@
 
 - ``FakeEstimator``  -- instant, seedless replacement for rf/xgb/catboost.
 - ``FakeValidator``  -- one train-on-all / predict-on-all pass, no CV loop.
-- ``patch_prompts``  -- swap every named ``*Prompts`` method for a canned answer.
 """
 
 from __future__ import annotations
-
-from collections.abc import Iterator
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
@@ -64,15 +61,3 @@ class FakeValidator:
                 getattr(model_wrapper, "feature_importances_", np.zeros(X.shape[1]))
             ),
         )
-
-
-def patch_prompts(monkeypatch, prompt_cls, answers: dict) -> None:
-    """For each ``name -> value`` in ``answers``, replace
-    ``prompt_cls.name`` with a callable returning ``value``. If ``value`` is
-    an iterator, successive calls return successive items (menu loops)."""
-    for name, value in answers.items():
-        if isinstance(value, Iterator):
-            resolver = lambda *_a, _it=value, **_k: next(_it)  # noqa: E731
-        else:
-            resolver = lambda *_a, _v=value, **_k: _v  # noqa: E731
-        monkeypatch.setattr(prompt_cls, name, staticmethod(resolver))

@@ -1,0 +1,7 @@
+# Created by Snakemake (--use-conda) when [envs].virsorter2 is not set in config.toml.
+# Pinned to the version the published results were produced with.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - virsorter=2.2.4

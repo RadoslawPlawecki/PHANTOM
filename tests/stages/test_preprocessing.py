@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from tests.stages.conftest import jobs_for, run_stage, validate_stage
 
-import phantom.stages.preprocessing  # noqa: F401 -- registers the stages
+import phantom.stages  # noqa: F401 -- registers the stages
 from phantom.runner.loader import RunFileError
 
 
@@ -120,3 +120,15 @@ def test_masks_validation(ctx):
         jobs_for("preprocessing.masks", ctx, medium_completeness=80.0, high_completeness=60.0)
     with pytest.raises(RunFileError, match=r"run tools\.checkv first"):
         validate_stage("preprocessing.masks", ctx)
+
+
+def test_missing_labels_file_is_reported_up_front(ctx):
+    # Validated with the parameters (before any step runs), not deferred
+    # behind the steps that produce the metadata.
+    with pytest.raises(RunFileError, match=r"labels file not found: .*labels\.csv"):
+        jobs_for(
+            "preprocessing.metadata",
+            ctx,
+            targets=["labeling"],
+            labeling={"strategy": "csv", "path": "data/labels.csv"},
+        )

@@ -1,11 +1,29 @@
 """
-Provides functionality to locate and load the project's TOML
-configuration file.
+Locates and loads the project's configuration.
+
+The configuration is ``config.toml`` (in the repository, generic: works on any
+machine) merged with an optional ``config.local.toml`` next to it (not
+tracked: this machine's tool environments, core count, and the feature
+versions of this dataset). Tables merge key by key; everything else in the
+local file replaces the base value.
 """
 
-import sys
 import tomllib
 from pathlib import Path
+from typing import Any
+
+LOCAL_NAME = "config.local.toml"
+
+
+def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """``override`` on top of ``base``: nested tables merged, other values replaced."""
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 class ConfigLoader:
@@ -23,8 +41,12 @@ class ConfigLoader:
     DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.toml"
 
     def __init__(self, path: Path | None = None):
-        self.path = path or self.DEFAULT_CONFIG_PATH
+        self.path = Path(path) if path else self.DEFAULT_CONFIG_PATH
         self.config: dict | None = None
+
+    @property
+    def local_path(self) -> Path:
+        return self.path.with_name(LOCAL_NAME)
 
     @classmethod
     def resolve_data_path(cls, relative_path: str | Path) -> Path:
@@ -34,14 +56,28 @@ class ConfigLoader:
         """
         return cls.DATA_ROOT / relative_path
 
+    @classmethod
+    def config_path(cls, config: dict, section: str, key: str = "path") -> Path:
+        """
+        A location from a loaded config (``[section].key``), resolved against
+        the data workspace. There are deliberately no defaults in code: a
+        missing entry is a configuration error naming what to add.
+        """
+        value = config.get(section, {}).get(key)
+        if not value:
+            raise ValueError(f"config.toml is missing [{section}].{key}")
+        return cls.resolve_data_path(value)
+
     def load(self) -> dict:
         if not self.path.is_file():
-            print(f"\n[ERROR] Configuration file '{self.path}' not found.")
-            print(
-                "Please ensure you have prepared the configuration file "
-                "in advance according to the SOP."
+            raise FileNotFoundError(
+                f"Configuration file not found: {self.path} (it ships with the repository; "
+                "pass --config to use another one)"
             )
-            sys.exit(1)
         with open(self.path, "rb") as f:
-            self.config = tomllib.load(f)
-        return self.config
+            config = tomllib.load(f)
+        if self.local_path.is_file():
+            with open(self.local_path, "rb") as f:
+                config = merge(config, tomllib.load(f))
+        self.config = config
+        return config

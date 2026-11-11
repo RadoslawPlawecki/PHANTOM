@@ -25,7 +25,7 @@ from phantom.runner.planner import JobFailed, execute, format_plan, plan, resolv
 from phantom.runner.provenance import phantom_version
 from phantom.runner.stage import REGISTRY, RunContext, get_stage
 from phantom.runner.stamps import StampStore
-from phantom.runner.template import describe_stage, render_template
+from phantom.runner.template import describe_stage, render_template, stages_markdown
 
 EXIT_OK, EXIT_INVALID, EXIT_FAILED = 0, 1, 2
 
@@ -44,6 +44,7 @@ def _parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("stages", help="list stages, or describe one")
     p.add_argument("stage", nargs="?")
+    p.add_argument("--markdown", action="store_true", help="every stage as a Markdown page")
 
     p = sub.add_parser("new", help="write a run-file template for a stage")
     p.add_argument("stage")
@@ -76,6 +77,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _cmd_stages(args, ctx: RunContext) -> int:
+    if args.markdown:
+        print(stages_markdown(list(REGISTRY.values()), ctx))
+        return EXIT_OK
     if args.stage:
         print(describe_stage(get_stage(args.stage), ctx))
         return EXIT_OK

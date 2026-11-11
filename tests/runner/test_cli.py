@@ -67,3 +67,12 @@ def test_validate_checks_input_data_not_only_the_file(toy, tmp_workspace, tmp_pa
     )
     assert main([*cfg, "validate", str(chain)]) == EXIT_OK
     assert "1 read inputs an earlier job produces" in capsys.readouterr().out
+
+
+def test_stages_markdown_lists_every_stage(toy, tmp_workspace, capsys):
+    assert main(["--config", str(tmp_workspace.config_path), "stages", "--markdown"]) == EXIT_OK
+    page = capsys.readouterr().out
+    from phantom.runner.stage import REGISTRY
+
+    assert all(f"## `{name}`" in page for name in REGISTRY)
+    assert "| `name` | string (**grid**) | **required** |" in page

@@ -3,7 +3,7 @@
 import numpy as np
 
 from tests._helpers.assertions import assert_feature_matrix
-from tests._helpers.fakes import FakeEstimator, FakeValidator, patch_prompts
+from tests._helpers.fakes import FakeEstimator, FakeValidator
 from tests._helpers.frames import contig_feature_df, extracted_matrix
 
 
@@ -44,16 +44,6 @@ def test_fake_validator_returns_cvresults():
     res = FakeValidator().run(FakeEstimator(), X, y)
     assert res.y_true.tolist() == [0, 1, 0, 1]
     assert res.test_idx.tolist() == [0, 1, 2, 3]
-
-
-def test_patch_prompts_helper(monkeypatch):
-    class _P:
-        @staticmethod
-        def ask():
-            return "real"
-
-    patch_prompts(monkeypatch, _P, {"ask": iter(["a", "b"])})
-    assert [_P.ask(), _P.ask()] == ["a", "b"]
 
 
 def test_assert_feature_matrix_accepts_valid():

@@ -1,16 +1,12 @@
 """
 Regression harness for the menu -> run-file migration.
 
-For every pipeline action ("case") it can run
-
-* the **legacy** path: the interactive controller with every prompt answered
-  by a fixed function (no human involved), and
-* the **new** path: the equivalent ``phantom`` run-file step,
-
-each in a throwaway sandbox workspace, and reduce the outputs to a
-*manifest* -- normalized relative path -> SHA-256 of the content. ``baseline``
-records the legacy manifest; ``check`` requires the new path to reproduce it
-file for file. Outputs are deleted after hashing (the disk is small; some
+Every pipeline action ("case", cases.py) runs as a ``phantom`` run-file step
+in a throwaway sandbox workspace, and its outputs are reduced to a *manifest*
+-- normalized relative path -> SHA-256 of the content. ``check`` requires a
+run to reproduce the recorded baseline file for file; ``baseline`` records a
+new one. The baselines in use were recorded from the former interactive menu
+(answered identically), so passing them means the stages reproduce it. Outputs are deleted after hashing (the disk is small; some
 cases write >1 GB), only small text outputs are kept next to the baseline for
 diffing.
 
@@ -62,7 +58,6 @@ REDUCED_TRIALS = 3
 class Case:
     name: str
     outputs: list[str]  # sandbox-relative paths whose content is the result
-    legacy: Callable[[Patcher], None] | None
     steps: list[dict]  # run-file [[steps]] for the new path
     links: list[str] = field(default_factory=list)  # read-only real inputs
     copies: list[str] = field(default_factory=list)  # small real files the case may modify
@@ -79,6 +74,9 @@ def build_sandbox(case: Case) -> None:
         shutil.rmtree(SANDBOX)
     SANDBOX.mkdir(parents=True)
     shutil.copy2(REPO_CONFIG, SANDBOX / "config.toml")
+    local = REPO_CONFIG.with_name("config.local.toml")
+    if local.is_file():  # this machine's settings and feature versions
+        shutil.copy2(local, SANDBOX / "config.local.toml")
     for rel in case.links:
         src = WORKSPACE / rel
         if not src.exists():
@@ -142,15 +140,6 @@ class Patcher:
     def set(self, obj: Any, name: str, value: Any) -> None:
         self._undo.append((obj, name, obj.__dict__.get(name, getattr(obj, name, None))))
         setattr(obj, name, value)
-
-    def static(self, cls: type, name: str, fn: Callable) -> None:
-        self.set(cls, name, staticmethod(fn))
-
-    def answers(self, cls: type, **answers: Any) -> None:
-        """Static prompt methods returning fixed values (callables are called)."""
-        for name, value in answers.items():
-            fn = value if callable(value) else (lambda *_a, _v=value, **_k: _v)
-            self.static(cls, name, fn)
 
     def close(self) -> None:
         for obj, name, old in reversed(self._undo):
@@ -326,29 +315,9 @@ def git_commit() -> str:
 # --- running -----------------------------------------------------------------
 
 
-def run_legacy(case: Case) -> dict:
-    if case.legacy is None:
-        raise SystemExit(f"[ERROR] {case.name}: no legacy path (already removed?)")
-    build_sandbox(case)
-    p = Patcher()
-    try:
-        with guard_real_inputs(case), sandboxed(), deterministic(p):
-            case.legacy(p)
-            return manifest(case)
-    finally:
-        p.close()
-
-
 def run_new(case: Case) -> dict:
-    import importlib
-
     import phantom.stages  # noqa: F401 -- registers the stages
     from phantom.runner.loader import build_jobs, parse_run_doc
-
-    # Stage modules not (yet) imported by phantom.stages during the migration.
-    for module in ("features_build", "optimization", "preprocessing", "tools"):
-        with contextlib.suppress(ModuleNotFoundError):
-            importlib.import_module(f"phantom.stages.{module}")
     from phantom.runner.planner import execute, plan
     from phantom.runner.stage import RunContext
     from phantom.runner.stamps import StampStore
@@ -371,15 +340,17 @@ def baseline_path(case: Case) -> Path:
 
 
 def record_baseline(case: Case, repeat: bool) -> None:
-    first = run_legacy(case)
+    """Records the current code's output as the new reference -- only after an
+    intended change of results, from a trusted commit."""
+    first = run_new(case)
     if not first:
-        raise SystemExit(f"[ERROR] {case.name}: legacy run produced no outputs")
+        raise SystemExit(f"[ERROR] {case.name}: the run produced no outputs")
     _keep_small_outputs(case, BASELINES / case.name)
     if repeat:
-        second = run_legacy(case)
+        second = run_new(case)
         diff = compare(first, second)
         if diff:
-            print(f"[NONDETERMINISTIC] {case.name}: two legacy runs differ:")
+            print(f"[NONDETERMINISTIC] {case.name}: two runs differ:")
             print(format_diff(diff))
             raise SystemExit(1)
     BASELINES.mkdir(parents=True, exist_ok=True)
@@ -414,7 +385,7 @@ def check(case: Case) -> bool:
         _keep_small_outputs(case, FAILED / case.name)
         print(f"  new outputs kept in {SANDBOX} (small text files also in {FAILED / case.name})")
         return False
-    print(f"[MATCH] {case.name}: {len(actual)} files identical to the legacy baseline")
+    print(f"[MATCH] {case.name}: {len(actual)} files identical to the baseline")
     shutil.rmtree(SANDBOX, ignore_errors=True)
     return True
 
@@ -443,14 +414,14 @@ def format_diff(diff: dict[str, list[str]]) -> str:
     return "\n".join(lines)
 
 
-def _report_real(case: Case, legacy: dict) -> None:
-    """Informational: does the legacy re-run reproduce what is on disk today?"""
+def _report_real(case: Case, recorded: dict) -> None:
+    """Informational: does the recorded output equal what is on disk today?"""
     for out_rel, real_rel in case.real.items():
         real_root = WORKSPACE / real_rel
         if not real_root.exists():
             continue
         same = differ = 0
-        for key, entry in legacy.items():
+        for key, entry in recorded.items():
             if not key.startswith(out_rel):
                 continue
             real_file = real_root / key[len(out_rel) :].lstrip("/")

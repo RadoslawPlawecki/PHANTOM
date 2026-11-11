@@ -65,6 +65,15 @@ path = "data/phanotate/orfs"
 type = "directory"
 description = "Open reading frames called from putative viral genomes using PHANOTATE."
 orf_fna = "*_PHA_ORFs.fna"
+genes = "data/phanotate/genes"
+bed = "data/phanotate/bed"
+proteins = "data/phanotate/proteins"
+
+
+[phabox2]
+path = "data/phabox2"
+type = "directory"
+description = "PhaBOX2 prediction tables per task (cherry, phagcn, phavip) and identification tool."
 
 
 [functions]
@@ -85,92 +94,36 @@ type = "directory"
 description = "Per-job stamps (parameters + input fingerprints) written by `phantom run`, used to skip jobs that are already up to date."
 
 
+# External tools (stages tools.*, run through workflow/Snakefile). Without
+# [envs] / [software] entries every tool runs in a pinned conda environment
+# created from workflow/envs/<tool>.yaml. Machine-specific choices (existing
+# environments, local tool checkouts, core counts) go in config.local.toml.
+
+[workflow]
+snakefile = "workflow/Snakefile"  # relative to the repository
+snakemake = ["snakemake"] # on PATH (environment.yml installs it)
+workdir = ".phantom/snakemake"    # Snakemake's own metadata, relative to the workspace
+cores = "all" # or a number
+
+
+[databases]  # relative to the workspace
+genomad = "genomad_db"
+checkv = "checkv-db-v1.5"
+phabox2 = "phabox_db_v2_2"
+virsorter2 = "virsorter2_db"
+
+
+[threads]  # per job; Snakemake runs jobs in parallel up to [workflow].cores
+genomad = 1
+vibrant = 5
+virsorter2 = 1
+checkv = 16
+phabox2 = 40
+
+
 [features]
 path = "data/features"
 type = "directory"
 description = "Input features for classification, stored as dataset versions (1.0, 2.0, ...), not software versions."
 
 
-[features.v1_0]
-path = "data/features/1.0"
-version = "1.0"
-type = "directory"
-
-
-[features.v1_0.raw]
-path = "raw"
-type = "directory"
-description = "Raw feature files stored separately for each sample before merging and preprocessing."
-
-
-[features.v1_0.raw_merged]
-path = "raw-merged"
-type = "directory"
-description = "Merged raw feature data combined into unified files containing all samples."
-
-
-[features.v1_0.preprocessed]
-path = "preprocessed"
-type = "directory"
-description = "Preprocessed feature data."
-
-
-[features.v1_0.extracted]
-path = "extracted"
-type = "directory"
-description = "Extracted feature representations used as input for classifier training and prediction."
-
-
-[features.v2_0]
-path = "data/features/2.0"
-version = "2.0"
-type = "directory"
-
-
-[features.v2_0.raw]
-path = "raw"
-type = "directory"
-description = "Raw feature files stored separately for each sample before merging and preprocessing."
-
-
-[features.v2_0.raw_merged]
-path = "raw-merged"
-type = "directory"
-description = "Merged raw feature data combined into unified files containing all samples."
-
-
-[features.v2_0.preprocessed]
-path = "preprocessed"
-type = "directory"
-description = "Preprocessed feature data."
-
-
-[features.v2_0.extracted]
-path = "extracted"
-type = "directory"
-description = "Extracted feature representations used as input for classifier training and prediction."
-
-[features.v3_0]
-path = "data/features/3.0"
-version = "3.0"
-type = "directory"
-
-[features.v3_0.raw]
-path = "raw"
-type = "directory"
-description = "Raw feature files stored separately for each sample before merging and preprocessing."
-
-[features.v3_0.raw_merged]
-path = "raw-merged"
-type = "directory"
-description = "Merged raw feature data combined into unified files containing all samples."
-
-[features.v3_0.preprocessed]
-path = "preprocessed"
-type = "directory"
-description = "Preprocessed feature data."
-
-[features.v3_0.extracted]
-path = "extracted"
-type = "directory"
-description = "Extracted feature representations used as input for classifier training and prediction."

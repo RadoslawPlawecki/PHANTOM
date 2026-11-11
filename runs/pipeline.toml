@@ -1,0 +1,94 @@
+# The whole pipeline, from MEGAHIT assemblies to classification results.
+# See the Quick start page of the wiki. Inputs: one assembly per sample in
+# data/megahit/ and the class labels in data/labels.csv (columns id,label).
+#   phantom run runs/setup.toml       # once: install the external tools
+#   phantom plan runs/pipeline.toml   # optional: see what will run
+#   phantom run runs/pipeline.toml
+# Rerunning skips every job that is already up to date.
+
+[run]
+name = "pipeline"
+description = "Assemblies -> viral genomes -> annotation -> features v1.0 -> classifiers"
+
+# --- 1. Virus identification (one job per assembly, in parallel) -------------
+
+[[steps]]
+stage = "tools.genomad"
+
+[[steps]]
+stage = "tools.vibrant"
+
+[[steps]]
+stage = "tools.virsorter2"
+
+# --- 2. Genomes, quality, labels ----------------------------------------------
+
+[[steps]]
+stage = "preprocessing.collect"
+
+[[steps]]
+stage = "tools.checkv"
+
+[[steps]]
+stage = "preprocessing.masks"           # MQ/HQ: completeness >= 50/75 %, contamination < 10 %
+
+[[steps]]
+stage = "preprocessing.metadata"
+targets = ["labeling", "runtimes", "checkv", "sizes"]
+# Which samples are cases (label 1) and which controls (0):
+labeling = { strategy = "csv", path = "data/labels.csv" }      # id,label table
+# labeling = { strategy = "threshold", threshold = 34 }        # S1..S34 -> 1, the rest -> 0
+# labeling = { strategy = "manual", positives = ["S1", "S5"] }
+
+[[steps]]
+stage = "preprocessing.visualize"
+
+# --- 3. Gene calling and annotation -------------------------------------------
+
+[[steps]]
+stage = "tools.phanotate"
+
+[[steps]]
+stage = "tools.phabox2"
+tasks = ["cherry", "phagcn", "phavip"]  # host, taxonomy, gene function
+
+# --- 4. Features (version 1.0) ------------------------------------------------
+
+[[steps]]
+stage = "features.import"
+version = "1.0"
+create = true
+sources = ["data/phabox2/cherry", "data/phabox2/phagcn", "data/phabox2/phavip"]
+
+[[steps]]
+stage = "features.merge"
+version = "1.0"
+id_columns = { "phavip/*" = "Genome", "*" = "Accession" }
+
+[[steps]]
+stage = "features.preprocess"
+version = "1.0"
+mask = "MQ_vMAGs.tsv"                   # keep medium+ quality viral genomes only
+
+[[steps]]
+stage = "features.extract"
+version = "1.0"
+feature_col = { cherry = "ncbi_genus", phagcn = "genus" }
+binary = true
+min_patients = 2
+
+# --- 5. Classification ----------------------------------------------------------
+
+[[steps]]
+stage = "classification.single"
+version = "1.0"
+modality = ["comp", "host", "func"]
+model = "catboost"
+validators = ["loocv", "rcv"]
+
+[[steps]]
+stage = "classification.multi"
+version = "1.0"
+fusion = ["early", "late"]
+model = "catboost"
+validators = ["loocv"]

@@ -165,12 +165,12 @@ def scan_metadata(config: dict) -> pd.DataFrame:
     config are ignored during this step due to the specific nature of various
     outputs.
     """
-    resolve = ConfigLoader.resolve_data_path
-    vib_path = resolve(config.get("vibrant", {}).get("path", "data/vibrant"))
-    vs2_path = resolve(config.get("virsorter2", {}).get("path", "data/virsorter2"))
-    gen_path = resolve(config.get("genomad", {}).get("path", "data/genomad"))
-    megahit_path = resolve(config.get("megahit", {}).get("path", "data/megahit"))
-    checkv_base = resolve(config.get("checkv", {}).get("path", "data/checkv"))
+    path = ConfigLoader.config_path
+    vib_path = path(config, "vibrant")
+    vs2_path = path(config, "virsorter2")
+    gen_path = path(config, "genomad")
+    megahit_path = path(config, "megahit")
+    checkv_base = path(config, "checkv")
 
     vib_root = build_index(vib_path)
     vs2_root = build_index(vs2_path)

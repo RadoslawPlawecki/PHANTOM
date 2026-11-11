@@ -55,20 +55,13 @@ def iter_fasta(path: Path):
 
 
 class FunctionSummarizer:
-    def __init__(self, version: str, config_mgr: FeatureConfigManager | None = None):
+    def __init__(self, version: str, config: dict, config_mgr: FeatureConfigManager):
         self.version = version
-        self.config_mgr = config_mgr or FeatureConfigManager()
-        self.config = ConfigLoader().load()
-        self.preprocessed_dir = self.config_mgr.get_stage_dir(version, "preprocessed")
-
-        phanotate_cfg = self.config.get("phanotate", {})
-        self.orf_root = ConfigLoader.resolve_data_path(
-            phanotate_cfg.get("path", "data/phanotate/orfs")
-        )
-        self.orf_glob = phanotate_cfg.get("orf_fna", "*_PHA_ORFs.fna")
-
-        functions_path = self.config.get("functions", {}).get("path", "data/functions")
-        self.out_root = ConfigLoader.resolve_data_path(functions_path) / version
+        self.config = config
+        self.preprocessed_dir = config_mgr.get_stage_dir(version, "preprocessed")
+        self.orf_root = ConfigLoader.config_path(config, "phanotate")
+        self.orf_glob = config.get("phanotate", {}).get("orf_fna", "*_PHA_ORFs.fna")
+        self.out_root = ConfigLoader.config_path(config, "functions") / version
 
         # config's [tools] maps abbreviation -> tool name (e.g. geN -> genomad);
         # ORF subdirectories are named after the tool, so invert it.

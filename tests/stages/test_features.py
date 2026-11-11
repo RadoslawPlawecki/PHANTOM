@@ -8,7 +8,7 @@ import pytest
 from tests._helpers.frames import _BACTEROIDES, _BACTEROIDES_GTDB
 from tests.stages.conftest import VERSION, validate_stage
 
-import phantom.stages.features_build  # noqa: F401 -- registers the stages
+import phantom.stages  # noqa: F401 -- registers the stages
 from phantom.runner.loader import RunFileError, build_jobs, parse_run_doc
 from phantom.runner.planner import DONE, execute, plan
 from phantom.runner.stamps import StampStore

@@ -1,0 +1,17 @@
+# One environment for everything PHANTOM itself needs: the `phantom` command,
+# its Python dependencies and Snakemake. The external tools (geNomad, CheckV,
+# PhaBOX2, ...) get their own pinned environments, created on first use.
+#
+#   mamba env create -f environment.yml
+#   conda activate phantom
+name: phantom
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.13
+  - pip
+  - snakemake-minimal=9.27
+  - poppler  # pdftoppm, used by the regression harness to compare plots
+  - pip:
+      - -e .

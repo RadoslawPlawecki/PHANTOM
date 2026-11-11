@@ -1,80 +1,46 @@
 """
-Handles merging raw per-sample feature files (TSV) into combined dataset
-files.
-
-The sequence-ID column of each leaf directory comes from
-``id_column_for(folder_label, columns)`` -- a pattern table from a run file
-(:func:`id_columns_from_patterns`), or, when omitted, the legacy interactive
-prompt.
+Merges raw per-sample feature files (TSV/CSV) into one file per tool and
+virus-identification tool. Each sample's sequence ids are prefixed with the
+sample id (``S1_`` + id) and the id column is renamed ``Accession``.
 """
 
 import fnmatch
 import os
-from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
 
 from phantom.config.features import FeatureConfigManager
 
-IdColumnChooser = Callable[[str, list[str]], str | None]
 
+class FeatureConcatenator:
+    def __init__(self, version: str, config_mgr: FeatureConfigManager, id_columns: dict[str, str]):
+        """
+        ``id_columns``: ``{"phavip/*": "Genome", "*": "Accession"}`` -- the
+        first glob pattern (in table order) matching a directory's path
+        relative to ``raw/`` names its sequence-id column.
+        """
+        self.version = version
+        self.id_columns = id_columns
+        self.raw_dir = config_mgr.get_stage_dir(version, "raw")
+        self.raw_merged_dir = config_mgr.get_stage_dir(version, "raw_merged")
+        self.written: list[Path] = []
 
-def id_columns_from_patterns(patterns: dict[str, str]) -> IdColumnChooser:
-    """
-    ``{"phavip/*": "Genome", "*": "Accession"}``: the first glob pattern
-    (in table order) matching a leaf directory's path relative to ``raw/``
-    names its ID column.
-    """
-
-    def choose(folder_label: str, columns: list[str]) -> str | None:
-        for pattern, column in patterns.items():
+    def id_column_for(self, folder_label: str) -> str | None:
+        for pattern, column in self.id_columns.items():
             if fnmatch.fnmatch(folder_label, pattern):
                 return column
         return None
 
-    return choose
-
-
-def _prompted_id_column(folder_label: str, columns: list[str]) -> str | None:
-    from phantom.cli.features import FeatureCollectionPrompts
-
-    return FeatureCollectionPrompts.ask_id_column(folder_label, columns)
-
-
-class FeatureConcatenator:
-    def __init__(
-        self,
-        version: str,
-        config_mgr: FeatureConfigManager | None = None,
-        id_column_for: IdColumnChooser | None = None,
-    ):
-        self.version = version
-        self.config_mgr = config_mgr or FeatureConfigManager()
-        self.raw_dir = self.config_mgr.get_stage_dir(version, "raw")
-        self.raw_merged_dir = self.config_mgr.get_stage_dir(version, "raw_merged")
-        self.id_column_for = id_column_for or _prompted_id_column
-        self.written: list[Path] = []
-
     def run(self) -> list[Path]:
-        """Merges every leaf directory; returns the merged files written."""
+        """Merges every directory holding raw files; returns the files written."""
         print(f"\n[INFO] Starting feature merging for version {self.version}...")
-        self.merge_raw_files()
+        for leaf_dir in self.leaf_dirs():
+            self._process_leaf_directory(leaf_dir)
         return self.written
 
     def leaf_dirs(self) -> list[Path]:
         return self._find_leaf_dirs(self.raw_dir) if self.raw_dir.exists() else []
-
-    def merge_raw_files(self) -> None:
-        if not self.raw_dir.exists():
-            print(f"[ERROR] Input directory does not exist: {self.raw_dir}")
-            return
-        leaf_dirs = self._find_leaf_dirs(self.raw_dir)
-        if not leaf_dirs:
-            print(f"[ERROR] No .tsv/.csv files found anywhere under {self.raw_dir}")
-            return
-        for leaf_dir in leaf_dirs:
-            self._process_leaf_directory(leaf_dir)
 
     def _find_leaf_dirs(self, root: Path) -> list[Path]:
         """
@@ -96,7 +62,7 @@ class FeatureConcatenator:
             return
         rel_dir = leaf_dir.relative_to(self.raw_dir)
         folder_label = str(rel_dir)
-        id_col = self._get_id_column(raw_files[0], folder_label)
+        id_col = self.id_column_for(folder_label)
         if not id_col:
             print(f"[ERROR] Skipped {folder_label}: No ID column selected.")
             return
@@ -123,9 +89,6 @@ class FeatureConcatenator:
     @staticmethod
     def raw_files(leaf_dir: Path) -> list[Path]:
         return sorted(list(leaf_dir.glob("*.tsv")) + list(leaf_dir.glob("*.csv")))
-
-    def _get_id_column(self, sample_file: Path, folder_label: str) -> str | None:
-        return self.id_column_for(folder_label, self.peek_columns(sample_file))
 
     def _read_and_format_file(
         self, file: Path, id_col: str

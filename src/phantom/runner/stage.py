@@ -46,10 +46,7 @@ class RunContext:
         ``[results]``), resolved against the data workspace. There is no
         fallback in code: a missing section is a configuration error.
         """
-        rel = self.config.get(section, {}).get("path")
-        if not rel:
-            raise ValueError(f"config.toml is missing [{section}].path")
-        return ConfigLoader.resolve_data_path(rel)
+        return ConfigLoader.config_path(self.config, section)
 
     def resolve(self, path: str | Path) -> Path:
         """A user-supplied path: absolute as is, relative to the data workspace."""

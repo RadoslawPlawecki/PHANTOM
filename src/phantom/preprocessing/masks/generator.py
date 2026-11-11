@@ -27,9 +27,8 @@ class CheckvMaskGenerator:
         high_completeness: float = HIGH_COMPLETENESS,
         max_contamination: float = MAX_CONTAMINATION,
     ):
-        resolve = ConfigLoader.resolve_data_path
-        self.checkv_dir = resolve(config.get("checkv", {}).get("path", "data/checkv"))
-        self.masks_dir = resolve(config.get("masks", {}).get("path", "data/masks"))
+        self.checkv_dir = ConfigLoader.config_path(config, "checkv")
+        self.masks_dir = ConfigLoader.config_path(config, "masks")
         self.medium = medium_completeness
         self.high = high_completeness
         self.max_contamination = max_contamination
