@@ -20,7 +20,7 @@ class ClassificationController:
         self.config = loader.load()
         self.config_path = loader.path
         self.config_mgr = FeatureConfigManager(self.config_path)
-        self.omics = self.config["omics"]
+        self.modalities = self.config["modalities"]
         self.vtools = list(self.config["tools"].keys())
 
     def run(self):
@@ -51,18 +51,18 @@ class ClassificationController:
 
         runs: list[tuple[Path, str, str | None]] = []
         if scope == "All virus-identification tools x all omics":
-            for omic in self.omics:
+            for omic in self.modalities:
                 for vtool in self.vtools:
                     in_file = ClassificationPrompts.ask_omic_file(
-                        self.config_mgr, version, omic, self.omics, vtool=vtool
+                        self.config_mgr, version, omic, self.modalities, vtool=vtool
                     )
                     if in_file:
                         runs.append((in_file, omic, vtool))
         else:
-            omic = ClassificationPrompts.ask_omic_choice(self.omics)
+            omic = ClassificationPrompts.ask_omic_choice(self.modalities)
             for vtool in self._vtools_for_scope(scope):
                 in_file = ClassificationPrompts.ask_omic_file(
-                    self.config_mgr, version, omic, self.omics, vtool=vtool
+                    self.config_mgr, version, omic, self.modalities, vtool=vtool
                 )
                 if in_file:
                     runs.append((in_file, omic, vtool))
@@ -96,13 +96,13 @@ class ClassificationController:
 
         for vtool in self._vtools_for_scope(scope):
             comp = ClassificationPrompts.ask_omic_file(
-                self.config_mgr, version, "comp", self.omics, vtool=vtool
+                self.config_mgr, version, "comp", self.modalities, vtool=vtool
             )
             host = ClassificationPrompts.ask_omic_file(
-                self.config_mgr, version, "host", self.omics, vtool=vtool
+                self.config_mgr, version, "host", self.modalities, vtool=vtool
             )
             func = ClassificationPrompts.ask_omic_file(
-                self.config_mgr, version, "func", self.omics, vtool=vtool
+                self.config_mgr, version, "func", self.modalities, vtool=vtool
             )
             if not (comp and host and func):
                 continue
@@ -130,13 +130,13 @@ class ClassificationController:
 
         for vtool in self._vtools_for_scope(scope):
             comp = ClassificationPrompts.ask_omic_file(
-                self.config_mgr, version, "comp", self.omics, vtool=vtool
+                self.config_mgr, version, "comp", self.modalities, vtool=vtool
             )
             host = ClassificationPrompts.ask_omic_file(
-                self.config_mgr, version, "host", self.omics, vtool=vtool
+                self.config_mgr, version, "host", self.modalities, vtool=vtool
             )
             func = ClassificationPrompts.ask_omic_file(
-                self.config_mgr, version, "func", self.omics, vtool=vtool
+                self.config_mgr, version, "func", self.modalities, vtool=vtool
             )
             if not (comp and host and func):
                 continue

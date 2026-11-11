@@ -1,24 +1,18 @@
-# ============================================================
 # Virus identification tools
-# ============================================================
 
 [tools]
 geN = "genomad"
 VIB = "vibrant"
 VS2 = "virsorter2"
 
-# ============================================================
-# Omic modalities
-# ============================================================
+# Modalities
 
-[omics]
-comp = { tool = "phagcn", tag = "PGN", label = "Composition" }
-host = { tool = "cherry", tag = "CHR", label = "Host prediction" }
-func = { tool = "phavip", tag = "PHV", label = "Functional" }
+[modalities]
+comp = { tool = "phagcn", tag = "PGN", label = "Virus taxonomy" }
+host = { tool = "cherry", tag = "CHR", label = "Bacterial host prediction" }
+func = { tool = "phavip", tag = "PHV", label = "Gene function" }
 
-# ============================================================
 # Paths
-# ============================================================
 
 [megahit]
 path = "data/megahit"
@@ -68,7 +62,7 @@ description = "CheckV masks generated to filter sequences based on completeness 
 [features]
 path = "data/features"
 type = "directory"
-description = "Versioned data features used as inputs for downstream classification and machine learning workflows."
+description = "Input features for classification, stored as dataset versions (1.0, 2.0, ...), not software versions."
 
 
 [features.v1_0]

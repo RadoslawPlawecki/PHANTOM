@@ -9,10 +9,10 @@ geN = "genomad"
 VIB = "vibrant"
 VS2 = "virsorter2"
 
-[omics]
-comp = { tool = "phagcn", tag = "PGN", label = "Composition" }
-host = { tool = "cherry", tag = "CHR", label = "Host prediction" }
-func = { tool = "phavip", tag = "PHV", label = "Functional" }
+[modalities]
+comp = { tool = "phagcn", tag = "PGN", label = "Virus taxonomy" }
+host = { tool = "cherry", tag = "CHR", label = "Bacterial host prediction" }
+func = { tool = "phavip", tag = "PHV", label = "Gene function" }
 
 [megahit]
 path = "data/megahit"
