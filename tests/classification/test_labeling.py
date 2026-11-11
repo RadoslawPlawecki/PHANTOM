@@ -151,36 +151,51 @@ class TestMetadataOverwrite:
 
 class TestExternalCSVLabeler:
     @staticmethod
-    def _run(tmp_path, external_rows):
+    def _run(tmp_path, external_rows, **kwargs):
         from phantom.preprocessing.metadata.labeling import ExternalCSVLabeler
 
         csv = tmp_path / "ext.csv"
         pd.DataFrame(external_rows).to_csv(csv, index=False)
-        meta = pd.DataFrame({"id": ["S1", "S2"], "original_file": ["a.fna", "b.fna"]})
-        return ExternalCSVLabeler(csv).assign_labels(meta)
+        meta = pd.DataFrame({"id": ["S1", "S2"], "geN_original_file": ["a.fna", "b.fna"]})
+        return ExternalCSVLabeler(csv, **kwargs).assign_labels(meta)
 
     def test_assigns_labels_from_csv(self, tmp_path):
-        rows = [{"original_file": "a.fna", "label": 1}, {"original_file": "b.fna", "label": 0}]
+        rows = [{"id": "S1", "label": 1}, {"id": "S2", "label": 0}]
         assert self._run(tmp_path, rows) == {"S1": 1, "S2": 0}
 
     def test_sample_missing_from_csv_raises_instead_of_class_0(self, tmp_path):
         with pytest.raises(ValueError, match="S2"):
-            self._run(tmp_path, [{"original_file": "a.fna", "label": 1}])
+            self._run(tmp_path, [{"id": "S1", "label": 1}])
 
     def test_duplicate_join_key_raises(self, tmp_path):
         rows = [
-            {"original_file": "a.fna", "label": 1},
-            {"original_file": "a.fna", "label": 0},
-            {"original_file": "b.fna", "label": 0},
+            {"id": "S1", "label": 1},
+            {"id": "S1", "label": 0},
+            {"id": "S2", "label": 0},
         ]
         with pytest.raises(ValueError, match="Duplicate"):
             self._run(tmp_path, rows)
 
     def test_non_binary_label_raises(self, tmp_path):
-        rows = [{"original_file": "a.fna", "label": 1}, {"original_file": "b.fna", "label": 2}]
+        rows = [{"id": "S1", "label": 1}, {"id": "S2", "label": 2}]
         with pytest.raises(ValueError, match="0 or 1"):
             self._run(tmp_path, rows)
 
     def test_missing_join_column_raises(self, tmp_path):
         with pytest.raises(ValueError, match="Join column"):
-            self._run(tmp_path, [{"file": "a.fna", "label": 1}])
+            self._run(tmp_path, [{"sample": "S1", "label": 1}])
+
+    def test_custom_join_key(self, tmp_path):
+        rows = [
+            {"geN_original_file": "a.fna", "label": 0},
+            {"geN_original_file": "b.fna", "label": 1},
+        ]
+        assert self._run(tmp_path, rows, join_key="geN_original_file") == {"S1": 0, "S2": 1}
+
+    def test_semicolon_separated_csv(self, tmp_path):
+        from phantom.preprocessing.metadata.labeling import ExternalCSVLabeler
+
+        csv = tmp_path / "ext.csv"
+        csv.write_text("id;label\nS1;1\nS2;0\n", encoding="utf-8")
+        meta = pd.DataFrame({"id": ["S1", "S2"]})
+        assert ExternalCSVLabeler(csv).assign_labels(meta) == {"S1": 1, "S2": 0}

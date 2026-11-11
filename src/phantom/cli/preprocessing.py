@@ -70,7 +70,9 @@ class PreprocessingPrompts:
 
     @staticmethod
     def ask_external_csv() -> str:
-        return questionary.text("Path to external CSV file:").ask()
+        return questionary.text(
+            "Path to external CSV file (columns: id, label -- e.g. S12, 1):"
+        ).ask()
 
     @staticmethod
     def ask_overwrite_labels(n_labeled: int, n_positive: int) -> bool:

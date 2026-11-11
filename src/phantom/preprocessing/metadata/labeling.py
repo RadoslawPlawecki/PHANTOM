@@ -50,7 +50,10 @@ class SampleThresholdLabeler(LabelingStrategy):
 
 
 class ExternalCSVLabeler(LabelingStrategy):
-    def __init__(self, csv_path: Path, join_key: str = "original_file", label_col: str = "label"):
+    # Joins on the metadata's sample ``id`` (e.g. "S12") by default: every
+    # metadata row has it, whereas original file names are per-tool columns
+    # (``geN_original_file``, ``VIB_original_file``, ...).
+    def __init__(self, csv_path: Path, join_key: str = "id", label_col: str = "label"):
         self.csv_path = Path(csv_path)
         self.join_key = join_key
         self.label_col = label_col
@@ -60,7 +63,9 @@ class ExternalCSVLabeler(LabelingStrategy):
         Every sample must get an explicit label from the external CSV -- a
         sample missing from it is an error, never silently class 0.
         """
-        external_df = pd.read_csv(self.csv_path)
+        # Sniff the delimiter: the project's own CSVs use ";", hand-made
+        # manifests usually ",".
+        external_df = pd.read_csv(self.csv_path, sep=None, engine="python")
         for name, frame in (("metadata", df), (str(self.csv_path), external_df)):
             if self.join_key not in frame.columns:
                 raise ValueError(f"Join column '{self.join_key}' not found in {name}.")
