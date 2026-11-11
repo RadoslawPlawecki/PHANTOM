@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import difflib
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -25,6 +25,8 @@ class RunContext:
     config: dict
     config_path: Path
     config_mgr: FeatureConfigManager
+    # Feature versions an earlier step of the current run file will create.
+    planned_versions: set[str] = field(default_factory=set)
 
     @classmethod
     def load(cls, config_path: Path | None = None) -> RunContext:
@@ -33,6 +35,10 @@ class RunContext:
         return cls(
             config=config, config_path=loader.path, config_mgr=FeatureConfigManager(loader.path)
         )
+
+    def reload(self) -> None:
+        """Re-read config.toml after a stage changed it (e.g. a new feature version)."""
+        self.config = ConfigLoader(self.config_path).load()
 
     def section_path(self, section: str) -> Path:
         """
@@ -61,6 +67,16 @@ class RunContext:
     def feature_versions(self) -> list[str]:
         return self.config_mgr.get_existing_versions()
 
+    def version_known(self, version: str) -> bool:
+        return version in self.feature_versions() or version in self.planned_versions
+
+    def stage_dir(self, version: str, stage: str) -> Path:
+        """A feature version's stage directory -- from config.toml, or, for a
+        version an earlier step creates, where it will be created."""
+        if version in self.planned_versions and version not in self.feature_versions():
+            return self.config_mgr.new_version_stage_dir(version, stage)
+        return self.config_mgr.get_stage_dir(version, stage)
+
 
 class Stage(ABC):
     name: ClassVar[str]
@@ -76,20 +92,40 @@ class Stage(ABC):
         return {}
 
     def validate(self, p: Any, ctx: RunContext) -> list[str]:
-        """Checks that need config/data (versions exist, input files exist)."""
+        """Parameter/config checks (version declared, names valid) -- always
+        run before anything executes."""
+        return []
+
+    def announces(self, p: Any) -> list[str]:
+        """Feature versions this job creates (later steps may then use them)."""
+        return []
+
+    def check_inputs(self, p: Any, ctx: RunContext) -> list[str]:
+        """
+        Checks on the input *data* (files exist, columns present). Run before
+        anything executes for jobs whose inputs already exist, and right
+        before the job itself for jobs whose inputs an earlier job of the
+        same run produces (e.g. extract after merge in one run file).
+        """
         return []
 
     @abstractmethod
     def inputs(self, p: Any, ctx: RunContext) -> list[Path]:
-        """Files/directories whose content determines this job's result."""
+        """
+        Files/directories whose content determines this job's result. Must
+        be computable before the inputs exist (prefer stable directories over
+        discovered file lists), so dependencies between jobs can be planned.
+        """
 
     @abstractmethod
     def writes(self, p: Any, ctx: RunContext) -> list[Path]:
         """Directories this job writes into (used to propagate staleness)."""
 
     @abstractmethod
-    def run(self, p: Any, ctx: RunContext) -> list[Path]:
-        """Does the work; returns the output paths actually produced."""
+    def run(self, p: Any, ctx: RunContext) -> list[Path] | None:
+        """Does the work; returns the output paths actually produced, or None
+        when nothing was produced on purpose (a dry run) -- then no stamp is
+        written, so the job still counts as not done."""
 
     def label(self, p: Any) -> str:
         """Short one-line description of a job, for ``phantom plan``."""

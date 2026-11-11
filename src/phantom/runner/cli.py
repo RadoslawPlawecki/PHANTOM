@@ -106,9 +106,13 @@ def _load(args, ctx: RunContext):
 
 def _cmd_validate(args, ctx: RunContext) -> int:
     _, jobs = _load(args, ctx)
-    print(
-        f"[OK] {args.runfile}: {len(jobs)} job(s) in {len({j.step.index for j in jobs})} step(s)."
-    )
+    # Plan as if everything ran, so the input data of every job that does not
+    # depend on an earlier one is checked too (dependent jobs: when they run).
+    planned = plan(jobs, ctx, StampStore(ctx.section_path("stamps")), force=True)
+    deferred = sum(pj.deferred for pj in planned)
+    steps = len({j.step.index for j in jobs})
+    note = f"; {deferred} read inputs an earlier job produces" if deferred else ""
+    print(f"[OK] {args.runfile}: {len(jobs)} job(s) in {steps} step(s){note}.")
     return EXIT_OK
 
 

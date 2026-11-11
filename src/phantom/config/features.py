@@ -8,6 +8,23 @@ import tomlkit
 
 from phantom.config.loader import ConfigLoader
 
+# Stage sub-tables written for every new feature version: key -> (folder, description).
+NEW_VERSION_STAGES = {
+    "raw": (
+        "raw",
+        "Raw feature files stored separately for each sample before merging and preprocessing.",
+    ),
+    "raw_merged": (
+        "raw-merged",
+        "Merged raw feature data combined into unified files containing all samples.",
+    ),
+    "preprocessed": ("preprocessed", "Preprocessed feature data."),
+    "extracted": (
+        "extracted",
+        "Extracted feature representations used as input for classifier training and prediction.",
+    ),
+}
+
 
 class FeatureConfigManager:
     def __init__(self, config_path: Path | str | None = None):
@@ -45,22 +62,7 @@ class FeatureConfigManager:
         v_table.add("path", base_path)
         v_table.add("version", version_str)
         v_table.add("type", "directory")
-        sub_dirs = {
-            "raw": (
-                "raw",
-                "Raw feature files stored separately for each sample before merging and preprocessing.",
-            ),
-            "raw_merged": (
-                "raw-merged",
-                "Merged raw feature data combined into unified files containing all samples.",
-            ),
-            "preprocessed": ("preprocessed", "Preprocessed feature data."),
-            "extracted": (
-                "extracted",
-                "Extracted feature representations used as input for classifier training and prediction.",
-            ),
-        }
-        for sub_key, (folder_name, desc) in sub_dirs.items():
+        for sub_key, (folder_name, desc) in NEW_VERSION_STAGES.items():
             sub_table = tomlkit.table()
             sub_table.add("path", folder_name)
             sub_table.add("type", "directory")
@@ -69,7 +71,16 @@ class FeatureConfigManager:
         features_table.add(v_key, v_table)
         with open(self.config_path, "w", encoding="utf-8") as f:
             f.write(tomlkit.dumps(doc))
-        return ConfigLoader.resolve_data_path(base_path) / "raw"
+        return ConfigLoader.resolve_data_path(base_path) / NEW_VERSION_STAGES["raw"][0]
+
+    def new_version_stage_dir(self, version_str: str, stage: str) -> Path:
+        """
+        Where ``create_new_version(version_str)`` *will* put a stage -- for
+        planning jobs on a version a run file creates before using it.
+        """
+        features_root = self.load_doc().get("features", {}).get("path", "data/features")
+        folder = NEW_VERSION_STAGES[stage][0]
+        return ConfigLoader.resolve_data_path(f"{features_root}/{version_str}") / folder
 
     def get_version_path(self, version_str: str) -> Path:
         return ConfigLoader.resolve_data_path(self._get_version_table(version_str)["path"])

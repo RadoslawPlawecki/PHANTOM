@@ -139,6 +139,7 @@ def apply_overrides(run: RunFile, overrides: list[str]) -> RunFile:
 
 
 def build_jobs(run: RunFile, ctx: RunContext) -> list[Job]:
+    ctx.planned_versions.clear()
     errors: list[str] = []
     jobs: list[Job] = []
     for step in run.steps:
@@ -150,11 +151,17 @@ def build_jobs(run: RunFile, ctx: RunContext) -> list[Job]:
             continue
         step_jobs, step_errors = _expand_step(step, stage, ctx)
         for job in step_jobs:
-            step_errors += stage.validate(job.params, ctx)
+            try:
+                step_errors += stage.validate(job.params, ctx)
+            except (KeyError, ValueError, FileNotFoundError) as e:
+                # e.g. a config.toml section the stage needs is missing
+                step_errors.append(str(e.args[0]) if e.args else str(e))
         # A grid repeats the same mistake per job; each message already names
         # the offending value, so report it once.
         errors += [f"{prefix}: {msg}" for msg in dict.fromkeys(step_errors)]
         jobs += step_jobs
+        for job in step_jobs:  # visible to the steps after this one
+            ctx.planned_versions.update(job.stage.announces(job.params))
     if errors:
         raise RunFileError(errors)
     return jobs

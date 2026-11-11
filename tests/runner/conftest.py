@@ -71,6 +71,11 @@ class Consume(Stage):
     def inputs(self, p, ctx):
         return [self.root / "out"]
 
+    def check_inputs(self, p, ctx):
+        # Needs at least one echo output to consume.
+        out = self.root / "out"
+        return [] if any(out.iterdir()) else [f"nothing to consume in {out}"]
+
     def writes(self, p, ctx):
         return [self.root / "final"]
 

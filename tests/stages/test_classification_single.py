@@ -60,7 +60,10 @@ def fake_classifier(monkeypatch):
 
 
 def _jobs(step, ctx):
-    return build_jobs(parse_run_doc({"steps": [{"stage": "classification.single", **step}]}), ctx)
+    """Build + data checks, as ``phantom validate`` does."""
+    jobs = build_jobs(parse_run_doc({"steps": [{"stage": "classification.single", **step}]}), ctx)
+    plan(jobs, ctx, StampStore(ctx.section_path("stamps")), force=True)
+    return jobs
 
 
 def test_vtool_defaults_to_every_configured_tool(ctx):

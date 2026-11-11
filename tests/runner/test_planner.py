@@ -7,7 +7,7 @@ import shutil
 
 import pytest
 
-from phantom.runner.loader import build_jobs, load_run_file, parse_run_doc
+from phantom.runner.loader import RunFileError, build_jobs, load_run_file, parse_run_doc
 from phantom.runner.planner import DONE, RUN, JobFailed, execute, plan, resolve_from
 from phantom.runner.stamps import StampStore
 
@@ -110,6 +110,8 @@ def test_pending_upstream_makes_downstream_stale(toy, ctx, store):
 
 
 def test_only_and_from_select_steps(toy, ctx, store):
+    _, _, root = toy
+    (root / "out" / "earlier").mkdir()  # something for the consumer to read
     _, planned = _run(PIPE, ctx, store, only=["test.consume"])
     assert _states(planned) == ["deselected", RUN]
     _, planned = _run(PIPE, ctx, store, start=resolve_from(parse_run_doc(PIPE), "test.consume"))
@@ -144,3 +146,37 @@ def test_provenance_run_toml_round_trips(toy, ctx, store):
     assert job.params == planned[0].job.params
     # A provenance file names exactly the job it came from, so it is up to date.
     assert plan([job], ctx, store)[0].state == DONE
+
+
+def test_data_checks_wait_for_an_upstream_producer(toy, ctx, store):
+    _, consume, _ = toy
+    # out/ is empty: on its own, the consumer is rejected before anything runs ...
+    with pytest.raises(RunFileError, match="nothing to consume"):
+        _run({"steps": [{"stage": "test.consume"}]}, ctx, store)
+    # ... but after a producer in the same run it is deferred, then passes.
+    run, planned = _run(PIPE, ctx, store)
+    assert [pj.deferred for pj in planned] == [False, True]
+    execute(planned, ctx, store, run)
+    assert len(consume.calls) == 1
+
+
+def test_deferred_check_failure_stops_before_the_job(toy, ctx, store):
+    echo, consume, _ = toy
+
+    def produce_nothing(p, c):
+        return []  # writes nothing into out/
+
+    echo.run = produce_nothing
+    run, planned = _run(PIPE, ctx, store)
+    with pytest.raises(JobFailed, match="nothing to consume"):
+        execute(planned, ctx, store, run)
+    assert consume.calls == []
+
+
+def test_stamp_fingerprints_inputs_as_they_are_after_the_run(toy, ctx, store):
+    run, planned = _run(PIPE, ctx, store)
+    execute(planned, ctx, store, run)
+    # The consumer's inputs did not exist at plan time; its stamp must match
+    # them now, so a rerun skips it.
+    _, planned = _run(PIPE, ctx, store)
+    assert _states(planned) == [DONE, DONE]

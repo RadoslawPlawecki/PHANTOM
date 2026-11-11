@@ -53,3 +53,17 @@ def test_run_failure_exit_code(toy, tmp_workspace, tmp_path, capsys):
     f = _write(tmp_path / "r.toml", '[[steps]]\nstage = "test.echo"\nname = "a"\n')
     assert main(["--config", str(tmp_workspace.config_path), "run", str(f)]) == EXIT_FAILED
     assert "[FAILED]" in capsys.readouterr().err
+
+
+def test_validate_checks_input_data_not_only_the_file(toy, tmp_workspace, tmp_path, capsys):
+    cfg = ["--config", str(tmp_workspace.config_path)]
+    alone = _write(tmp_path / "c.toml", '[[steps]]\nstage = "test.consume"\n')
+    assert main([*cfg, "validate", str(alone)]) == EXIT_INVALID
+    assert "nothing to consume" in capsys.readouterr().err
+    # After a producer in the same file the check waits for the producer.
+    chain = _write(
+        tmp_path / "p.toml",
+        '[[steps]]\nstage = "test.echo"\nname = "a"\n\n[[steps]]\nstage = "test.consume"\n',
+    )
+    assert main([*cfg, "validate", str(chain)]) == EXIT_OK
+    assert "1 read inputs an earlier job produces" in capsys.readouterr().out
