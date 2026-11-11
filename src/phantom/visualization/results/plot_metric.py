@@ -57,7 +57,6 @@ def plot_metric(metric_name, datasets_dict, output_path="metric_comparison.pdf")
 
 if __name__ == "__main__":
     multiple_datasets = {
-        "iPHoP": "data/results/multi_omic/host=iphop/catboost/all_metrics.csv",
         "CHERRY": "data/results/multi_omic/host=cherry/catboost/all_metrics.csv",
     }
     plot_metric("mcc", multiple_datasets, "plots/host_comparison.pdf")
