@@ -46,6 +46,14 @@ type = "directory"
 path = "data/masks"
 type = "directory"
 
+[results]
+path = "results"
+type = "directory"
+
+[stamps]
+path = ".phantom/stamps"
+type = "directory"
+
 [features]
 path = "data/features"
 type = "directory"

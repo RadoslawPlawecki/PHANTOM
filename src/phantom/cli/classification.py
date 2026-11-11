@@ -6,6 +6,7 @@ from pathlib import Path
 
 import questionary
 
+from phantom.classification.data.inputs import feature_files, find_feature_file
 from phantom.config.features import FeatureConfigManager
 from phantom.config.loader import ConfigLoader
 
@@ -110,18 +111,17 @@ class ClassificationPrompts:
         omics: dict,
         vtool: str | None = None,
     ) -> Path | None:
-        tool = omics[omic]["tool"]
         tag = omics[omic]["tag"]
-        extracted_dir = config_mgr.get_stage_dir(version, "extracted") / tool
-        files = sorted(extracted_dir.glob(f"*_{tag}_FEAT.csv"))
+        extracted_dir, files = feature_files(config_mgr, version, omics[omic])
         if not files:
             print(f"[ERROR] No {tag} feature files found in {extracted_dir}")
             return None
         if vtool is not None:
-            match = next((f for f in files if f.name.startswith(f"{vtool}_")), None)
-            if match is None:
-                print(f"[ERROR] No {vtool} file for omic {omic} in {extracted_dir}")
-            return match
+            try:
+                return find_feature_file(config_mgr, version, omics[omic], vtool)
+            except FileNotFoundError as e:
+                print(f"[ERROR] {e}")
+                return None
         if len(files) == 1:
             return files[0]
         choice = questionary.select(

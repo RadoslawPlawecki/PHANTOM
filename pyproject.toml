@@ -26,6 +26,9 @@ dependencies = [
     "xgboost>=3.3.0"
 ]
 
+[project.scripts]
+phantom = "phantom.runner.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.16.8",
@@ -105,6 +108,11 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["phantom"]
+
+[tool.ruff.lint.flake8-bugbear]
+# phantom.runner.params.param() wraps dataclasses.field() for stage Params,
+# so a call to it as a dataclass default is intended, not a shared default.
+extend-immutable-calls = ["phantom.runner.params.param"]
 
 [tool.mypy]
 ignore_missing_imports = true

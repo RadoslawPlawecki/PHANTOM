@@ -73,6 +73,18 @@ type = "directory"
 description = "Called ORFs grouped by predicted functional category, with per-ORF genus and host annotations."
 
 
+[results]
+path = "results"
+type = "directory"
+description = "Experiment outputs, kept apart from data/: one subdirectory per run type and feature version."
+
+
+[stamps]
+path = ".phantom/stamps"
+type = "directory"
+description = "Per-job stamps (parameters + input fingerprints) written by `phantom run`, used to skip jobs that are already up to date."
+
+
 [features]
 path = "data/features"
 type = "directory"
