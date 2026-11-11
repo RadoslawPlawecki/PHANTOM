@@ -115,17 +115,23 @@ def _load_preprocessed(
     apply_phavip_config, on the masked data.
     """
     path = _select_raw_merged_file(tool, config_mgr)
-    df = load_file(path)
     mask_path = FeatureExtractionPrompts().ask_mask_file(path)
+    return path, load_masked(tool, path, mask_path)
+
+
+def load_masked(tool: str, path: Path, mask_path: Path | None) -> pd.DataFrame:
+    """The non-interactive core of _load_preprocessed: load ``path``, apply
+    the CheckV mask, then the tool's search-independent preprocessing."""
+    df = load_file(path)
     df = apply_mask(df, mask_path)
     if tool == "cherry":
-        return path, CherryFeaturePipeline().preprocess(df)
+        return CherryFeaturePipeline().preprocess(df)
     if tool == "phagcn":
-        return path, PhagcnFeaturePipeline().preprocess(df)
+        return PhagcnFeaturePipeline().preprocess(df)
     if tool == "phavip":
         print("[INFO] Precomputing Regex categories to accelerate Optuna trials...")
         df["Category"] = PhavipFeaturePipeline().categorize_annotations(df["Annotation"])
-        return path, df
+        return df
     raise ValueError(f"Unknown tool: {tool}")
 
 

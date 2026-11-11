@@ -7,6 +7,7 @@ behind one questionary-driven entry point. Used by FeatureController's
 
 import json
 import os
+from pathlib import Path
 
 import pandas as pd
 
@@ -23,6 +24,7 @@ class FeatureOptimizer:
         self.config_mgr = config_mgr
 
     def run(self) -> None:
+        """Legacy interactive menu: ask for everything, then optimize()."""
         tool = FeatureOptimizationPrompts.ask_tool_choice(list(SEARCH_FNS))
         if not tool:
             return
@@ -37,18 +39,42 @@ class FeatureOptimizer:
             smote=FeatureOptimizationPrompts.ask_smote_choice(),
         )
 
-        outer_folds = outer_repeats = inner_trials = top_k_features = None
-        n_permutations = permutation_trials = None
+        knobs: dict = {}
         if mode in ("nested", "all"):
-            outer_folds = FeatureOptimizationPrompts.ask_outer_folds()
-            outer_repeats = FeatureOptimizationPrompts.ask_outer_repeats()
-            inner_trials = FeatureOptimizationPrompts.ask_inner_trials()
-            top_k_features = FeatureOptimizationPrompts.ask_top_k_features()
+            knobs["outer_folds"] = FeatureOptimizationPrompts.ask_outer_folds()
+            knobs["outer_repeats"] = FeatureOptimizationPrompts.ask_outer_repeats()
+            knobs["inner_trials"] = FeatureOptimizationPrompts.ask_inner_trials()
+            knobs["top_k_features"] = FeatureOptimizationPrompts.ask_top_k_features()
         if mode in ("permutation", "all"):
-            n_permutations = FeatureOptimizationPrompts.ask_n_permutations()
-            permutation_trials = FeatureOptimizationPrompts.ask_permutation_trials()
+            knobs["n_permutations"] = FeatureOptimizationPrompts.ask_n_permutations()
+            knobs["permutation_trials"] = FeatureOptimizationPrompts.ask_permutation_trials()
 
         out_dir = FeatureOptimizationPrompts.ask_optimization_out_dir(tool)
+        source_path, loaded_df = _load_preprocessed(tool, self.config_mgr)
+        self.optimize(tool, mode, config, out_dir, source_path, loaded_df, **knobs)
+
+    def optimize(
+        self,
+        tool: str,
+        mode: str,
+        config: RunConfig,
+        out_dir,
+        source_path: Path,
+        loaded_df: pd.DataFrame,
+        *,
+        outer_folds: int | None = None,
+        outer_repeats: int | None = None,
+        inner_trials: int | None = None,
+        top_k_features: int | None = None,
+        n_permutations: int | None = None,
+        permutation_trials: int | None = None,
+    ) -> None:
+        """
+        Runs the evaluation strategies of ``mode`` on an already loaded and
+        masked dataframe (see search_core.load_masked) and saves everything
+        under ``out_dir``. Knobs a mode does not use must be None, so the
+        recorded metadata only shows what actually applied.
+        """
         os.makedirs(out_dir, exist_ok=True)
 
         from phantom.classification.analytics.saver import ExperimentSaver
@@ -70,8 +96,6 @@ class FeatureOptimizer:
                 "labels": Labeling.default().provenance(),
             }
         )
-
-        source_path, loaded_df = _load_preprocessed(tool, self.config_mgr)
 
         observed = None
         if mode in ("exploratory", "all"):
