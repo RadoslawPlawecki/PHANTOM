@@ -31,7 +31,9 @@ class PhagcnFeaturePipeline:
             lineage_parts = row["Lineage"].split(";")
             scores = [float(x) for x in row["PhaGCNScore"].split(";")]
             taxonomy = {}
-            for lineage, score in zip(lineage_parts, scores, strict=True):
+            # PhaGCN can report fewer scores than lineage ranks; ranks without
+            # a score are dropped (strict=True would raise on real data).
+            for lineage, score in zip(lineage_parts, scores, strict=False):
                 rank, value = lineage.split(":", 1)
                 taxonomy[rank] = value if score >= self.min_phagcn_score else None
             return pd.Series(taxonomy)

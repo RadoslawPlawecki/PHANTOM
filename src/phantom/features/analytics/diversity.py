@@ -17,6 +17,10 @@ TOOL_FEATURE_COL = {"phagcn": "genus", "cherry": "ncbi_genus"}
 TOOL_TITLES = {"phagcn": "Phage genus", "cherry": "Bacterial host genus"}
 TOOL_FILE_STEMS = {"phagcn": "phagcn_genus", "cherry": "cherry_host"}
 TOOL_UNIT_NAMES = {"phagcn": "genus", "cherry": "host"}
+# Per-genome diversity variants: "ratio_of_means" = mean(units) / mean(genomes)
+# per group (no whisker); "mean_of_ratios" = mean(units / genomes) over the
+# group's samples (SD whisker).
+RATIO_MODES = ("ratio_of_means", "mean_of_ratios")
 
 
 class DiversityAnalyzer:
@@ -42,11 +46,19 @@ class DiversityAnalyzer:
         """
         Per vtool: {"per_sample": df[id, label, genome_count, unit_count,
         ratio], "group_stats": df indexed by label (0/1) with MultiIndex
-        columns (metric, "mean"/"std") for metric in [ratio, unit_count]}.
+        columns (metric, stat): ("unit_count", "mean"/"std"),
+        ("genome_count", "mean"/"std"), ("mean_of_ratios", "mean"/"std")
+        and ("ratio_of_means", "mean")}.
 
         ``unit_count`` is the number of *distinct* taxonomic units
         (occurrence-based, i.e. nunique over the feature column) present in
         a sample -- not a sum of per-unit abundance/occurrence counts.
+
+        Two per-genome variants (see ``RATIO_MODES``):
+        ``mean_of_ratios`` averages each sample's unit_count / genome_count
+        over the group's samples; ``ratio_of_means`` is mean(unit_count) /
+        mean(genome_count) over the group, which has no per-sample spread
+        and therefore no "std".
         """
         feature_col = TOOL_FEATURE_COL[tool]
         results = {}
@@ -57,7 +69,13 @@ class DiversityAnalyzer:
                 label=("label", "first"),
             )
             per_sample["ratio"] = per_sample["unit_count"] / per_sample["genome_count"]
-            group_stats = per_sample.groupby("label")[["ratio", "unit_count"]].agg(["mean", "std"])
+            group_stats = per_sample.groupby("label")[["unit_count", "genome_count", "ratio"]].agg(
+                ["mean", "std"]
+            )
+            group_stats = group_stats.rename(columns={"ratio": "mean_of_ratios"}, level=0)
+            group_stats[("ratio_of_means", "mean")] = (
+                group_stats[("unit_count", "mean")] / group_stats[("genome_count", "mean")]
+            )
             results[vtool] = {
                 "per_sample": per_sample.reset_index(),
                 "group_stats": group_stats,
@@ -97,7 +115,9 @@ class DiversityAnalyzer:
             .reset_index(drop=True)
         )
 
-    def run(self, out_dir: Path) -> None:
+    def run(self, out_dir: Path, ratio_mode: str = "ratio_of_means") -> None:
+        if ratio_mode not in RATIO_MODES:
+            raise ValueError(f"Unknown ratio mode {ratio_mode!r}, expected one of {RATIO_MODES}")
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         any_tool_processed = False
@@ -113,18 +133,25 @@ class DiversityAnalyzer:
             group_stats_by_vtool = {vt: r["group_stats"] for vt, r in results.items()}
             unit_label = TOOL_TITLES[tool]
             file_stem = TOOL_FILE_STEMS[tool]
+            unit_lower = unit_label.lower()
+            if ratio_mode == "ratio_of_means":
+                per_genome_ylabel = (
+                    f"(Avg. distinct {unit_lower} / sample) / (Avg. genomes / sample)"
+                )
+            else:
+                per_genome_ylabel = f"Avg. (distinct {unit_lower} / genomes) / sample"
             DiversityVisualizer.plot_group_bar_by_vtool(
                 group_stats_by_vtool,
-                value_col="ratio",
+                value_col=ratio_mode,
                 title=f"{unit_label} diversity per identified genome",
-                ylabel=f"Avg. distinct {unit_label.lower()} / genome",
-                save_path=out_dir / f"{file_stem}_per_genome.pdf",
+                ylabel=per_genome_ylabel,
+                save_path=out_dir / f"{file_stem}_per_genome_{ratio_mode}.pdf",
             )
             DiversityVisualizer.plot_group_bar_by_vtool(
                 group_stats_by_vtool,
                 value_col="unit_count",
                 title=f"{unit_label} diversity per sample",
-                ylabel=f"Avg. distinct {unit_label.lower()} / sample",
+                ylabel=f"Avg. distinct {unit_lower} / sample",
                 save_path=out_dir / f"{file_stem}_per_sample.pdf",
             )
         if not any_tool_processed:
@@ -145,6 +172,7 @@ class DiversityAnalyzer:
             {
                 "version": self.version,
                 "tools": ["phagcn", "cherry"],
+                "ratio_mode": ratio_mode,
             }
         )
 

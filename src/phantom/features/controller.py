@@ -91,7 +91,10 @@ class FeatureController:
         if not version:
             return
         out_dir = FeatureDiversityPrompts.ask_out_dir(version)
-        DiversityAnalyzer(version=version, config_mgr=self.config_mgr).run(out_dir)
+        ratio_mode = FeatureDiversityPrompts.ask_ratio_mode()
+        DiversityAnalyzer(version=version, config_mgr=self.config_mgr).run(
+            out_dir, ratio_mode=ratio_mode
+        )
 
 
 if __name__ == "__main__":

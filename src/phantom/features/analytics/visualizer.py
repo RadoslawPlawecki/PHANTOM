@@ -18,6 +18,36 @@ VTOOL_DISPLAY_NAMES = {"geN": "geNomad", "VIB": "VIBRANT", "VS2": "VirSorter2"}
 
 class DiversityVisualizer:
     @staticmethod
+    def _draw_group_bars(ax, stats: pd.DataFrame, value_col: str) -> None:
+        labels = [0, 1]
+        means = [
+            stats.loc[label, (value_col, "mean")] if label in stats.index else 0 for label in labels
+        ]
+        # Metrics without a ("std") column (e.g. a group-level ratio of
+        # means, which has no per-sample spread) are drawn without whiskers.
+        stds = None
+        if (value_col, "std") in stats.columns:
+            stds = np.nan_to_num(
+                [
+                    stats.loc[label, (value_col, "std")] if label in stats.index else 0
+                    for label in labels
+                ],
+                nan=0.0,
+            )
+        ax.bar(
+            [GROUP_LABELS[label] for label in labels],
+            means,
+            yerr=stds,
+            capsize=6,
+            ecolor="black",
+            color=[GROUP_COLORS[label] for label in labels],
+            edgecolor="black",
+            linewidth=0.8,
+        )
+        ax.grid(axis="y", linestyle="--", alpha=0.5)
+        ax.set_axisbelow(True)
+
+    @staticmethod
     def plot_group_bar_by_vtool(
         group_stats_by_vtool: dict[str, pd.DataFrame],
         value_col: str,
@@ -29,40 +59,18 @@ class DiversityVisualizer:
         group_stats_by_vtool[vtool] is indexed by label (0/1) with
         MultiIndex columns (metric, "mean"/"std") -- e.g. produced by
         `per_sample.groupby("label")[[...]].agg(["mean", "std"])`. Bars
-        show the group mean with a standard-deviation whisker on top.
+        show the group mean with a standard-deviation whisker on top, or
+        no whisker when ``(value_col, "std")`` is absent.
         """
         use_latex()
         vtools = list(group_stats_by_vtool)
-        _, axes = plt.subplots(1, len(vtools), figsize=(5 * len(vtools), 5), sharey=True)
-        if len(vtools) == 1:
-            axes = [axes]
+        _, axes = plt.subplots(
+            1, len(vtools), figsize=(5 * len(vtools), 5), sharey=True, squeeze=False
+        )
+        axes = axes[0]
         for ax, vtool in zip(axes, vtools, strict=True):
-            stats = group_stats_by_vtool[vtool]
-            labels = [0, 1]
-            means = [
-                stats.loc[label, (value_col, "mean")] if label in stats.index else 0
-                for label in labels
-            ]
-            stds = np.nan_to_num(
-                [
-                    stats.loc[label, (value_col, "std")] if label in stats.index else 0
-                    for label in labels
-                ],
-                nan=0.0,
-            )
-            ax.bar(
-                [GROUP_LABELS[label] for label in labels],
-                means,
-                yerr=stds,
-                capsize=6,
-                ecolor="black",
-                color=[GROUP_COLORS[label] for label in labels],
-                edgecolor="black",
-                linewidth=0.8,
-            )
+            DiversityVisualizer._draw_group_bars(ax, group_stats_by_vtool[vtool], value_col)
             ax.set_title(VTOOL_DISPLAY_NAMES.get(vtool, vtool), fontsize=13, weight="bold", pad=10)
-            ax.grid(axis="y", linestyle="--", alpha=0.5)
-            ax.set_axisbelow(True)
         axes[0].set_ylabel(ylabel, fontsize=12, labelpad=8)
         plt.suptitle(title, fontsize=15, weight="bold", y=0.98)
         plt.tight_layout()

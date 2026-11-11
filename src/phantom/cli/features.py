@@ -290,6 +290,19 @@ class FeatureOptimizationPrompts:
 
 
 class FeatureDiversityPrompts:
+    RATIO_MODE_CHOICES: ClassVar[dict[str, str]] = {
+        "Ratio of means: mean(genera) / mean(genomes) per group": "ratio_of_means",
+        "Mean of ratios: mean(genera / genomes) over samples": "mean_of_ratios",
+    }
+
+    @staticmethod
+    def ask_ratio_mode() -> str:
+        answer = questionary.select(
+            "Per-genome diversity metric:",
+            choices=list(FeatureDiversityPrompts.RATIO_MODE_CHOICES),
+        ).ask()
+        return FeatureDiversityPrompts.RATIO_MODE_CHOICES.get(answer, "ratio_of_means")
+
     @staticmethod
     def ask_out_dir(version: str) -> Path:
         default_dir = ConfigLoader.resolve_data_path(f"data/results/diversity/{version}")
