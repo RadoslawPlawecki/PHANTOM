@@ -1,27 +1,69 @@
 """
 Handles merging raw per-sample feature files (TSV) into combined dataset
 files.
+
+The sequence-ID column of each leaf directory comes from
+``id_column_for(folder_label, columns)`` -- a pattern table from a run file
+(:func:`id_columns_from_patterns`), or, when omitted, the legacy interactive
+prompt.
 """
 
+import fnmatch
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
 
-from phantom.cli.features import FeatureCollectionPrompts
 from phantom.config.features import FeatureConfigManager
+
+IdColumnChooser = Callable[[str, list[str]], str | None]
+
+
+def id_columns_from_patterns(patterns: dict[str, str]) -> IdColumnChooser:
+    """
+    ``{"phavip/*": "Genome", "*": "Accession"}``: the first glob pattern
+    (in table order) matching a leaf directory's path relative to ``raw/``
+    names its ID column.
+    """
+
+    def choose(folder_label: str, columns: list[str]) -> str | None:
+        for pattern, column in patterns.items():
+            if fnmatch.fnmatch(folder_label, pattern):
+                return column
+        return None
+
+    return choose
+
+
+def _prompted_id_column(folder_label: str, columns: list[str]) -> str | None:
+    from phantom.cli.features import FeatureCollectionPrompts
+
+    return FeatureCollectionPrompts.ask_id_column(folder_label, columns)
 
 
 class FeatureConcatenator:
-    def __init__(self, version: str, config_mgr: FeatureConfigManager | None = None):
+    def __init__(
+        self,
+        version: str,
+        config_mgr: FeatureConfigManager | None = None,
+        id_column_for: IdColumnChooser | None = None,
+    ):
         self.version = version
         self.config_mgr = config_mgr or FeatureConfigManager()
         self.raw_dir = self.config_mgr.get_stage_dir(version, "raw")
         self.raw_merged_dir = self.config_mgr.get_stage_dir(version, "raw_merged")
+        self.id_column_for = id_column_for or _prompted_id_column
+        self.written: list[Path] = []
 
-    def run(self) -> None:
+    def run(self) -> list[Path]:
+        """Merges every leaf directory; returns the merged files written."""
         print(f"\n[INFO] Starting feature merging for version {self.version}...")
         self.merge_raw_files()
+        return self.written
+
+    def leaf_dirs(self) -> list[Path]:
+        return self._find_leaf_dirs(self.raw_dir) if self.raw_dir.exists() else []
 
     def merge_raw_files(self) -> None:
         if not self.raw_dir.exists():
@@ -49,7 +91,7 @@ class FeatureConcatenator:
         return sorted(leaf_dirs)
 
     def _process_leaf_directory(self, leaf_dir: Path) -> None:
-        raw_files = sorted(list(leaf_dir.glob("*.tsv")) + list(leaf_dir.glob("*.csv")))
+        raw_files = self.raw_files(leaf_dir)
         if not raw_files:
             return
         rel_dir = leaf_dir.relative_to(self.raw_dir)
@@ -69,13 +111,21 @@ class FeatureConcatenator:
         if dfs:
             self._save_merged_df(dfs, rel_dir, sample_name)
 
-    def _get_id_column(self, sample_file: Path, folder_label: str) -> str | None:
+    @staticmethod
+    def peek_columns(sample_file: Path) -> list[str]:
         sep = "\t" if sample_file.suffix.lower() == ".tsv" else ";"
         try:
             peek_df = pd.read_csv(sample_file, sep=sep, nrows=2)
         except Exception:
             peek_df = pd.read_csv(sample_file, sep=None, engine="python", nrows=2)
-        return FeatureCollectionPrompts.ask_id_column(folder_label, list(peek_df.columns))
+        return list(peek_df.columns)
+
+    @staticmethod
+    def raw_files(leaf_dir: Path) -> list[Path]:
+        return sorted(list(leaf_dir.glob("*.tsv")) + list(leaf_dir.glob("*.csv")))
+
+    def _get_id_column(self, sample_file: Path, folder_label: str) -> str | None:
+        return self.id_column_for(folder_label, self.peek_columns(sample_file))
 
     def _read_and_format_file(
         self, file: Path, id_col: str
@@ -108,5 +158,6 @@ class FeatureConcatenator:
         out_filename = f"{sample_name or rel_dir.name}_M.csv"
         out_path = out_dir / out_filename
         merged.to_csv(out_path, sep=";", index=False)
+        self.written.append(out_path)
         print(f"[INFO] Merged: {rel_dir}")
         print(f"       Saved to: {out_path} (Shape: {merged.shape})")
