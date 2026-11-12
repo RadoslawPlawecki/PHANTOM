@@ -134,7 +134,7 @@ def gather_metadata(
     return written
 
 
-def collect_genomes(config: dict, meta: MetadataManager, auto_format: bool = False) -> pd.DataFrame:
+def collect_genomes(config: dict, meta: MetadataManager) -> pd.DataFrame:
     """
     Copies the identification tools' viral contigs into the genome registry
     and records the original/formatted file names (the "renaming" columns)
@@ -144,12 +144,12 @@ def collect_genomes(config: dict, meta: MetadataManager, auto_format: bool = Fal
 
     collector = GenomeCollector(config, meta)
     invalid = collector.scan_for_invalid()
-    if invalid and not auto_format:
+    if invalid:
         print(
-            f"[WARNING] {invalid} improperly named folder(s) skipped; "
-            "set auto_format = true to rename and include them."
+            f"[WARNING] {invalid} folder(s) not named S<n>_<tool> skipped: tool outputs must "
+            "come from assemblies numbered by preprocessing.samples."
         )
-    df = collector.collect(auto_format=auto_format)
+    df = collector.collect()
     if df.empty:
         raise ValueError("no genomes were found or copied")
     meta.add_metadata_columns(df, overwrite=set(df.columns) - {"id"})

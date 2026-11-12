@@ -14,6 +14,10 @@ comp = { tool = "phagcn", tag = "PGN", label = "Virus taxonomy" }
 host = { tool = "cherry", tag = "CHR", label = "Bacterial host prediction" }
 func = { tool = "phavip", tag = "PHV", label = "Gene function" }
 
+[samples]
+path = "data/samples.csv"
+type = "file"
+
 [megahit]
 path = "data/megahit"
 type = "directory"

@@ -96,7 +96,8 @@ def build_megahit_index(root):
     if not root_path.exists() or not root_path.is_dir():
         print(f"[WARNING] MEGAHIT directory not found: '{root_path}'. Skipping size metrics.")
         return {}
-    return {get_sample_id(f): f for f in root_path.glob("*_assembly.contigs.fa")}
+    # S<n>.fa, linked by preprocessing.samples (stat() follows the link: real sizes)
+    return {f.stem: f for f in root_path.glob("S*.fa") if re.fullmatch(r"S\d+", f.stem)}
 
 
 def build_checkv_index(root):
@@ -144,8 +145,8 @@ def runtime_virsorter2(folder: Path):
 
 
 def runtime_genomad(folder):
-    start_files = list(folder.glob("*contigs_annotate.log"))
-    end_files = list(folder.glob("*contigs_summary.log"))
+    start_files = list(folder.glob("*_annotate.log"))
+    end_files = list(folder.glob("*_summary.log"))
     if not start_files or not end_files:
         return None
     start = datetime.strptime(extract_first_time(start_files[0]), "%H:%M:%S")
@@ -185,7 +186,7 @@ def scan_metadata(config: dict) -> pd.DataFrame:
     results = {sid: {"id": sid} for sid in sample_ids}
 
     for sid, folder in vib_root.items():
-        logs = list(folder.rglob("VIBRANT_log_run_*_assembly.contigs.log"))
+        logs = list(folder.rglob("VIBRANT_log_run_*.log"))
         if logs:
             results[sid]["vib_runtime"] = runtime_vibrant(
                 max(logs, key=lambda f: f.stat().st_mtime)

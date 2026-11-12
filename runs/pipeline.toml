@@ -1,6 +1,8 @@
-# The whole pipeline, from MEGAHIT assemblies to classification results.
-# See the Quick start page of the wiki. Inputs: one assembly per sample in
-# data/megahit/ and the class labels in data/labels.csv (columns id,label).
+# The whole pipeline, from assemblies to classification results.
+# See the Quick start page of the wiki. Input: the sample sheet
+# data/samples.csv -- one row per sample, columns assembly,label: the path of
+# its assembly (any file name; relative = next to the sheet) and 1 = case,
+# 0 = control. Samples become S1, S2, ... in the sheet's row order.
 #   phantom run runs/setup.toml       # once: install the external tools
 #   phantom plan runs/pipeline.toml   # optional: see what will run
 #   phantom run runs/pipeline.toml
@@ -8,9 +10,12 @@
 
 [run]
 name = "pipeline"
-description = "Assemblies -> viral genomes -> annotation -> features v1.0 -> classifiers"
+description = "Sample sheet -> viral genomes -> annotation -> features v1.0 -> classifiers"
 
-# --- 1. Virus identification (one job per assembly, in parallel) -------------
+# --- 1. Samples and virus identification (one job per assembly, in parallel) --
+
+[[steps]]
+stage = "preprocessing.samples"         # sheet -> S<n>.fa links + id, file, label in the metadata
 
 [[steps]]
 stage = "tools.genomad"
@@ -34,11 +39,7 @@ stage = "preprocessing.masks"           # MQ/HQ: completeness >= 50/75 %, contam
 
 [[steps]]
 stage = "preprocessing.metadata"
-targets = ["labeling", "runtimes", "checkv", "sizes"]
-# Which samples are cases (label 1) and which controls (0):
-labeling = { strategy = "csv", path = "data/labels.csv" }      # id,label table
-# labeling = { strategy = "threshold", threshold = 34 }        # S1..S34 -> 1, the rest -> 0
-# labeling = { strategy = "manual", positives = ["S1", "S5"] }
+targets = ["runtimes", "checkv", "sizes"]  # labels already come from the sample sheet
 
 [[steps]]
 stage = "preprocessing.visualize"

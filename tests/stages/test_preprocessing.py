@@ -34,7 +34,18 @@ def test_collect_copies_genomes_and_records_renaming(ws, ctx):
         "S2": "S2_geN.fna",
     }
     # Collecting again replaces the renaming columns instead of failing.
-    run_stage("preprocessing.collect", ctx, auto_format=True)
+    run_stage("preprocessing.collect", ctx)
+
+
+def test_collect_skips_folders_without_a_sample_id(ws, ctx):
+    d = ws.data_root / "genomad" / "patientA_geN"
+    d.mkdir(parents=True)
+    (d / "patientA_virus.fna").write_text(">c\nACGT\n", encoding="utf-8")
+    (ws.data_root / "genomad" / "S1_geN").mkdir()
+    (ws.data_root / "genomad" / "S1_geN" / "S1_virus.fna").write_text(">c\nA\n", encoding="utf-8")
+    _meta_path(ws).unlink()
+    run_stage("preprocessing.collect", ctx)
+    assert [p.name for p in (ws.data_root / "genomes" / "genomad").glob("*.fna")] == ["S1_geN.fna"]
 
 
 # --- metadata --------------------------------------------------------------------

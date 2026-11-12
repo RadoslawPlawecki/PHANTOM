@@ -176,8 +176,8 @@ class _Identify(Stage):
 
     def check_inputs(self, p: IdentifyParams, ctx: RunContext) -> list[str]:
         megahit = ctx.section_path("megahit")
-        if not megahit.is_dir() or not any(megahit.glob("*.fa")):
-            return [f"no MEGAHIT assemblies (*.fa) in {megahit}"]
+        if not megahit.is_dir() or not any(megahit.glob("S*.fa")):
+            return [f"no assemblies (S<n>.fa) in {megahit} -- run preprocessing.samples first"]
         return []
 
     def label(self, p: IdentifyParams) -> str:

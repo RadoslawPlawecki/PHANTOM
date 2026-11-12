@@ -21,6 +21,7 @@ one, else the bioconda package's command.
 """
 
 import glob
+import re
 from pathlib import Path
 
 P = config["paths"]  # absolute directories
@@ -57,11 +58,11 @@ def keep(sample):
 
 
 def assemblies():
-    """sample -> MEGAHIT assembly (001_S1_assembly.contigs.fa -> S1)."""
+    """sample -> assembly: the S<n>.fa links preprocessing.samples makes."""
     found = {}
-    for f in sorted(glob.glob(f"{P['megahit']}/*.fa")):
-        sample = Path(f).name.split("_")[1]
-        if keep(sample):
+    for f in sorted(glob.glob(f"{P['megahit']}/S*.fa")):
+        sample = Path(f).stem
+        if re.fullmatch(r"S\d+", sample) and keep(sample):
             found[sample] = f
     return found
 

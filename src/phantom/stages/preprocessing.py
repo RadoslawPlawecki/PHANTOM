@@ -1,6 +1,8 @@
 """
-Preprocessing stages: from the identification tools' output to labeled samples.
+Preprocessing stages: from the user's sample sheet and the identification
+tools' output to labeled samples.
 
+``preprocessing.samples``    sample sheet -> ids S1..Sn, S<n>.fa assembly links, labels
 ``preprocessing.collect``    viral contigs of each tool -> the genome registry (+ renaming metadata)
 ``preprocessing.metadata``   class labels and scraped statistics -> the metadata CSV
 ``preprocessing.masks``      CheckV quality summaries -> MQ/HQ vMAG/provMAG masks
@@ -37,14 +39,83 @@ def _require_paths(ctx: RunContext, sections: tuple[str, ...]) -> list[str]:
     ]
 
 
+# --- preprocessing.samples -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SamplesParams:
+    sheet: str | None = param(
+        None, help="sample sheet, columns assembly,label[,id]; default: [samples].path"
+    )
+    accept_changes: bool = param(
+        False,
+        help="accept ids whose assembly file changed (e.g. moved); their tool outputs are not redone",
+    )
+
+
+@register
+class Samples(Stage):
+    name = "preprocessing.samples"
+    summary = "Sample sheet -> ids S1..Sn: link each assembly as S<n>.fa, record file and label"
+    Params = SamplesParams
+
+    @staticmethod
+    def _sheet(p: SamplesParams, ctx: RunContext) -> Path:
+        return ctx.resolve(p.sheet) if p.sheet else ctx.section_path("samples")
+
+    def validate(self, p: SamplesParams, ctx: RunContext) -> list[str]:
+        errors = _require_paths(ctx, ("megahit",) if p.sheet else ("samples", "megahit"))
+        if not ctx.config.get("genomes", {}).get("metadata_path"):
+            errors.append("config.toml is missing [genomes].metadata_path")
+        return errors
+
+    def check_inputs(self, p: SamplesParams, ctx: RunContext) -> list[str]:
+        from phantom.analysis.genomes.samples import check_against_metadata, read_sheet
+
+        samples, errors = read_sheet(self._sheet(p, ctx))
+        return errors or check_against_metadata(samples, _meta(ctx).load(), p.accept_changes)
+
+    def inputs(self, p: SamplesParams, ctx: RunContext) -> list[Path]:
+        from phantom.analysis.genomes.samples import read_sheet
+
+        sheet = self._sheet(p, ctx)
+        return [sheet, *(s.assembly for s in read_sheet(sheet)[0])]
+
+    def writes(self, p: SamplesParams, ctx: RunContext) -> list[Path]:
+        return [ctx.section_path("megahit"), metadata_path(ctx)]
+
+    def run(self, p: SamplesParams, ctx: RunContext) -> list[Path]:
+        from phantom.analysis.genomes.samples import (
+            ASSEMBLY,
+            LABEL,
+            check_against_metadata,
+            link_assemblies,
+            metadata_frame,
+            read_sheet,
+        )
+
+        meta = _meta(ctx)
+        samples, errors = read_sheet(self._sheet(p, ctx))
+        errors = errors or check_against_metadata(samples, meta.load(), p.accept_changes)
+        if errors:
+            raise ValueError("; ".join(errors))
+        directory = ctx.section_path("megahit")
+        link_assemblies(samples, directory)
+        meta.add_metadata_columns(metadata_frame(samples), overwrite={ASSEMBLY, LABEL})
+        cases = sum(s.label for s in samples)
+        print(
+            f"[INFO] {len(samples)} samples ({cases} cases, {len(samples) - cases} controls): "
+            f"{samples[0].id}..{samples[-1].id} linked in {directory}"
+        )
+        return [directory]
+
+
 # --- preprocessing.collect -----------------------------------------------------
 
 
 @dataclass(frozen=True)
 class CollectParams:
-    auto_format: bool = param(
-        False, help="rename and include tool folders not named S<n>_<abbr> (else they are skipped)"
-    )
+    pass
 
 
 @register
@@ -76,7 +147,7 @@ class Collect(Stage):
     def run(self, p: CollectParams, ctx: RunContext) -> list[Path]:
         from phantom.analysis.genomes.metadata.gather import collect_genomes
 
-        df = collect_genomes(ctx.config, _meta(ctx), auto_format=p.auto_format)
+        df = collect_genomes(ctx.config, _meta(ctx))
         print(f"[INFO] Collected genomes for {len(df)} samples.")
         return [ctx.section_path("genomes")]
 

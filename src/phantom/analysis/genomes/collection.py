@@ -36,7 +36,7 @@ class GenomeCollector:
                     invalid_count += 1
         return invalid_count
 
-    def collect(self, auto_format: bool = False) -> pd.DataFrame:
+    def collect(self) -> pd.DataFrame:
         """
         Collects files and returns a wide-format DataFrame joined on sample ID.
         """
@@ -48,20 +48,13 @@ class GenomeCollector:
             root = ConfigLoader.resolve_data_path(tool_config["path"])
             dest_dir = self.base_dest / tool_name
             dest_dir.mkdir(parents=True, exist_ok=True)
-            sample_counter = 1
             for file in root.rglob(tool_config["viral_fna"]):
                 parts = file.relative_to(root).parts
                 subfolder = parts[0] if len(parts) > 1 else "root"
-                valid = self._is_valid_format(subfolder, tool_abbr)
-                if valid:
-                    sample_id = subfolder.split("_")[0]
-                    formatted_name = f"{subfolder}.fna"
-                else:
-                    if not auto_format:
-                        continue
-                    sample_id = f"S{sample_counter}"
-                    formatted_name = f"{sample_id}_{tool_abbr}.fna"
-                    sample_counter += 1
+                if not self._is_valid_format(subfolder, tool_abbr):
+                    continue  # ids come only from preprocessing.samples
+                sample_id = subfolder.split("_")[0]
+                formatted_name = f"{subfolder}.fna"
                 dst_file = dest_dir / formatted_name
                 shutil.copy2(file, dst_file)
                 if sample_id not in all_samples:

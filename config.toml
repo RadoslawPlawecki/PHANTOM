@@ -14,24 +14,30 @@ func = { tool = "phavip", tag = "PHV", label = "Gene function" }
 
 # Paths
 
+[samples]
+path = "data/samples.csv"
+type = "file"
+description = "Sample sheet (your input): one row per sample, columns assembly,label[,id]; any file names."
+
+
 [megahit]
 path = "data/megahit"
 type = "directory"
-description = "Metagenome assemblies generated using the MEGAHIT assembler."
+description = "Assemblies as S<n>.fa links to the files of the sample sheet (made by preprocessing.samples)."
 
 
 [genomad]
 path = "data/genomad"
 type = "directory"
 description = "Viral sequence predictions and annotations generated using geNomad."
-viral_fna = "*_assembly.contigs_virus.fna"
+viral_fna = "*_virus.fna"
 
 
 [vibrant]
 path = "data/vibrant"
 type = "directory"
 description = "VIBRANT-based viral sequence annotations and auxiliary files."
-viral_fna = "*_assembly.contigs.phages_combined.fna"
+viral_fna = "*.phages_combined.fna"
 
 
 [virsorter2]
