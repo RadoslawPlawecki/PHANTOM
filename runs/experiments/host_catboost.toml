@@ -8,7 +8,7 @@ description = "Bacterial host prediction, all virus-identification tools, CatBoo
 
 [[steps]]
 stage = "classification.single"
-version = "1.0"
+version = "3.0"
 modality = "host"
 vtool = ["geN", "VIB", "VS2"]
 model = "catboost"

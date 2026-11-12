@@ -10,7 +10,7 @@ from phantom.runner.loader import RunFileError
 
 
 def test_diversity_grid_and_default_out_dir(ws, ctx, monkeypatch):
-    import phantom.features.analytics.diversity as mod
+    import phantom.analysis.features.diversity as mod
 
     calls = []
 

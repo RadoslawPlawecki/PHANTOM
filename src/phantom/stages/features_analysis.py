@@ -73,7 +73,7 @@ class Diversity(Stage):
         return [output_dir(p.out_dir, ctx, DIVERSITY_DIR, p.version)]
 
     def run(self, p: DiversityParams, ctx: RunContext) -> list[Path]:
-        from phantom.features.analytics.diversity import DiversityAnalyzer
+        from phantom.analysis.features.diversity import DiversityAnalyzer
 
         out_dir = output_dir(p.out_dir, ctx, DIVERSITY_DIR, p.version)
         DiversityAnalyzer(version=p.version, config_mgr=ctx.config_mgr).run(
@@ -122,7 +122,7 @@ class SummarizeFunctions(Stage):
         return [ctx.section_path("functions") / p.version]
 
     def run(self, p: SummarizeParams, ctx: RunContext) -> list[Path]:
-        from phantom.features.summary.function_summarizer import FunctionSummarizer
+        from phantom.analysis.features.functions import FunctionSummarizer
 
         summarizer = FunctionSummarizer(p.version, ctx.config, ctx.config_mgr)
         summarizer.run()

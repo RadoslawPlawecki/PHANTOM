@@ -151,7 +151,7 @@ class Patcher:
 def deterministic(p: Patcher) -> Iterator[None]:
     import optuna
 
-    from phantom.features.optimization import search_core
+    from phantom.analysis.features.optimization import search_core
 
     real_create = optuna.create_study
 
@@ -164,7 +164,7 @@ def deterministic(p: Patcher) -> Iterator[None]:
 
     # The MDS evaluation's PERMANOVA is called without a seed, so its p-value
     # varies from run to run.
-    from phantom.classification.ml import evaluator
+    from phantom.analysis.classification.ml import evaluator
 
     real_permanova = evaluator.permanova
     p.set(evaluator, "permanova", lambda *a, **k: real_permanova(*a, **{"seed": 0, **k}))

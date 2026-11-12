@@ -36,7 +36,7 @@ def ctx(ws) -> RunContext:
 @pytest.fixture
 def fake_classifier(monkeypatch):
     """Replaces SingleOmicClassifier; records configs, creates the exp dir."""
-    import phantom.classification.execution.single_omic as mod
+    import phantom.analysis.classification.execution.single_omic as mod
 
     seen = []
 

@@ -30,7 +30,7 @@ MAX_MIN_PATIENTS = 10  # upper bound for min_patients
 
 def _pipeline_flags(tool: str) -> tuple[bool, bool]:
     """(needs a feature column, uses binary/min_patients) for a tool."""
-    from phantom.features.extraction.extractor import PIPELINES
+    from phantom.analysis.features.extractor import PIPELINES
 
     cls = PIPELINES[tool]
     return bool(getattr(cls, "NEEDS_FEATURE_COLUMN", False)), bool(
@@ -99,7 +99,7 @@ class Import(Stage):
         return [ctx.stage_dir(p.version, "raw")]
 
     def run(self, p: ImportParams, ctx: RunContext) -> list[Path]:
-        from phantom.features.collection.importer import FeatureImporter
+        from phantom.analysis.features.importer import FeatureImporter
 
         importer = FeatureImporter(config_path=ctx.config_path)
         raw_dir, failed = importer.import_sources(
@@ -134,7 +134,7 @@ class Merge(Stage):
         return {"version": ctx.feature_versions()}
 
     def _concatenator(self, p: MergeParams, ctx: RunContext):
-        from phantom.features.merging.concatenator import FeatureConcatenator
+        from phantom.analysis.features.concatenator import FeatureConcatenator
 
         return FeatureConcatenator(p.version, ctx.config_mgr, p.id_columns)
 
@@ -215,7 +215,7 @@ class Preprocess(Stage):
         return errors
 
     def check_inputs(self, p: PreprocessParams, ctx: RunContext) -> list[str]:
-        from phantom.features.preprocessing.preprocessor import mask_dir_for
+        from phantom.analysis.features.preprocessor import mask_dir_for
 
         root = ctx.stage_dir(p.version, "raw_merged")
         files = [
@@ -247,7 +247,7 @@ class Preprocess(Stage):
         return _tool_dirs(ctx, p.version, "preprocessed", p.tools)
 
     def run(self, p: PreprocessParams, ctx: RunContext) -> list[Path]:
-        from phantom.features.preprocessing.preprocessor import FeaturePreprocessor
+        from phantom.analysis.features.preprocessor import FeaturePreprocessor
 
         return FeaturePreprocessor(
             p.version,
@@ -350,7 +350,7 @@ class Extract(Stage):
         return _tool_dirs(ctx, p.version, "extracted", p.tools)
 
     def run(self, p: ExtractParams, ctx: RunContext) -> list[Path]:
-        from phantom.features.extraction.extractor import FeatureExtractor
+        from phantom.analysis.features.extractor import FeatureExtractor
 
         return FeatureExtractor(
             p.version,

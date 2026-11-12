@@ -47,7 +47,7 @@ class FakeValidator:
         self.verbose = verbose
 
     def run(self, model_wrapper, X, y):
-        from phantom.classification.ml.validators import CVResults
+        from phantom.analysis.classification.ml.validators import CVResults
 
         X = np.asarray(X, dtype=float)
         y = np.asarray(y)

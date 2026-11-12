@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from phantom.preprocessing.metadata.mapping import MetadataManager
+from phantom.analysis.genomes.metadata.mapping import MetadataManager
 from phantom.runner.stage import RunContext
 
 

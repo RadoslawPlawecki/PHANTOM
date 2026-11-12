@@ -24,7 +24,7 @@ PLOTS_DIR = ("plots", "metadata")
 
 
 def _meta(ctx: RunContext):
-    from phantom.preprocessing.metadata.mapping import MetadataManager
+    from phantom.analysis.genomes.metadata.mapping import MetadataManager
 
     return MetadataManager(MetadataManager.path_from_config(ctx.config))
 
@@ -74,7 +74,7 @@ class Collect(Stage):
         return [ctx.section_path("genomes")]
 
     def run(self, p: CollectParams, ctx: RunContext) -> list[Path]:
-        from phantom.preprocessing.metadata.gather import collect_genomes
+        from phantom.analysis.genomes.metadata.gather import collect_genomes
 
         df = collect_genomes(ctx.config, _meta(ctx), auto_format=p.auto_format)
         print(f"[INFO] Collected genomes for {len(df)} samples.")
@@ -106,7 +106,7 @@ class Metadata(Stage):
     Params = MetadataParams
 
     def validate(self, p: MetadataParams, ctx: RunContext) -> list[str]:
-        from phantom.preprocessing.metadata.gather import check_labeling_spec
+        from phantom.analysis.genomes.metadata.gather import check_labeling_spec
 
         errors = []
         if not p.targets:
@@ -159,7 +159,7 @@ class Metadata(Stage):
         return [metadata_path(ctx)]
 
     def run(self, p: MetadataParams, ctx: RunContext) -> list[Path]:
-        from phantom.preprocessing.metadata.gather import build_labeler, gather_metadata
+        from phantom.analysis.genomes.metadata.gather import build_labeler, gather_metadata
 
         labeler = build_labeler(p.labeling, ctx.resolve) if p.labeling else None
         columns = gather_metadata(
@@ -209,7 +209,7 @@ class Masks(Stage):
         return [ctx.section_path("masks")]
 
     def run(self, p: MasksParams, ctx: RunContext) -> list[Path]:
-        from phantom.preprocessing.masks.generator import CheckvMaskGenerator
+        from phantom.analysis.genomes.masks import CheckvMaskGenerator
 
         generator = CheckvMaskGenerator(
             ctx.config,
@@ -240,7 +240,7 @@ class Visualize(Stage):
     Params = VisualizeParams
 
     def check_inputs(self, p: VisualizeParams, ctx: RunContext) -> list[str]:
-        from phantom.preprocessing.metadata.visualizer import MetadataVisualizer
+        from phantom.analysis.genomes.metadata.visualizer import MetadataVisualizer
 
         meta = _meta(ctx)
         if not meta.path.is_file():
@@ -264,7 +264,7 @@ class Visualize(Stage):
         return [output_dir(p.out_dir, ctx, *PLOTS_DIR)]
 
     def run(self, p: VisualizeParams, ctx: RunContext) -> list[Path]:
-        from phantom.preprocessing.metadata.visualizer import MetadataVisualizer
+        from phantom.analysis.genomes.metadata.visualizer import MetadataVisualizer
 
         df = _meta(ctx).load()
         names: list[str] = list(p.plots) if p.plots else MetadataVisualizer.available_plots(df)

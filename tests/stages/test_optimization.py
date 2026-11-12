@@ -14,8 +14,8 @@ from phantom.runner.loader import RunFileError
 
 @pytest.fixture
 def fake_optimize(ws, monkeypatch):
-    import phantom.features.optimization.optimizer as opt
-    import phantom.features.optimization.search_core as core
+    import phantom.analysis.features.optimization.optimizer as opt
+    import phantom.analysis.features.optimization.search_core as core
 
     merged = ws.stage_dir("raw_merged", "phagcn")
     merged.mkdir(parents=True)

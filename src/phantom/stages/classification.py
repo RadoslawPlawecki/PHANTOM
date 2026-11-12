@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from phantom.classification.data.inputs import find_feature_file
+from phantom.analysis.classification.data.inputs import find_feature_file
 from phantom.runner.params import param
 from phantom.runner.stage import RunContext, Stage, register
 from phantom.stages._common import (
@@ -137,8 +137,8 @@ class SingleOmic(Stage):
         return [output_dir(p.out_dir, ctx, SINGLE_OMIC_DIR, p.version)]
 
     def run(self, p: SingleOmicParams, ctx: RunContext) -> list[Path]:
-        from phantom.classification.data.config import SingleOmicConfig
-        from phantom.classification.execution.single_omic import SingleOmicClassifier
+        from phantom.analysis.classification.data.config import SingleOmicConfig
+        from phantom.analysis.classification.execution.single_omic import SingleOmicClassifier
 
         out_dir = output_dir(p.out_dir, ctx, SINGLE_OMIC_DIR, p.version)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -214,8 +214,8 @@ class MultiOmic(Stage):
         return [output_dir(p.out_dir, ctx, MULTI_OMIC_DIR, p.version)]
 
     def run(self, p: MultiOmicParams, ctx: RunContext) -> list[Path]:
-        from phantom.classification.data.config import MultiOmicConfig
-        from phantom.classification.execution.multi_omic import MultiOmicClassifier
+        from phantom.analysis.classification.data.config import MultiOmicConfig
+        from phantom.analysis.classification.execution.multi_omic import MultiOmicClassifier
 
         out_dir = output_dir(p.out_dir, ctx, MULTI_OMIC_DIR, p.version)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -286,8 +286,8 @@ class Mds(Stage):
         return [output_dir(p.out_dir, ctx, MDS_DIR, p.version)]
 
     def run(self, p: MdsParams, ctx: RunContext) -> list[Path]:
-        from phantom.classification.data.config import MdsConfig
-        from phantom.classification.execution.unsupervised_classifier import (
+        from phantom.analysis.classification.data.config import MdsConfig
+        from phantom.analysis.classification.execution.unsupervised_classifier import (
             UnsupervisedClassifier,
         )
 

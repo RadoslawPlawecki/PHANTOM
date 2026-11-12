@@ -14,10 +14,10 @@ def test_import_phantom():
 
 
 def test_key_modules_import():
-    from phantom.classification.data.labeling import Labeling
-    from phantom.classification.ml.evaluator import EvaluatorSl
+    from phantom.analysis.classification.data.labeling import Labeling
+    from phantom.analysis.classification.ml.evaluator import EvaluatorSl
+    from phantom.analysis.features.tools.matrix import build_matrix
     from phantom.config.features import FeatureConfigManager
-    from phantom.features.pipelines.matrix import build_matrix
 
     assert all(callable(x) for x in (Labeling.derive_label, EvaluatorSl.evaluate, build_matrix))
     assert FeatureConfigManager is not None

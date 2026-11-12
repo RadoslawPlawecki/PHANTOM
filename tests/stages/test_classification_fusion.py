@@ -13,14 +13,14 @@ from phantom.runner.loader import RunFileError
 
 @pytest.fixture
 def fake_multi(monkeypatch):
-    import phantom.classification.execution.multi_omic as mod
+    import phantom.analysis.classification.execution.multi_omic as mod
 
     return fake_executor(monkeypatch, mod, "MultiOmicClassifier")
 
 
 @pytest.fixture
 def fake_mds(monkeypatch):
-    import phantom.classification.execution.unsupervised_classifier as mod
+    import phantom.analysis.classification.execution.unsupervised_classifier as mod
 
     return fake_executor(monkeypatch, mod, "UnsupervisedClassifier")
 
