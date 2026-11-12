@@ -10,8 +10,8 @@ import pandas as pd
 
 from phantom.analysis.classification.data.labeling import Labeling
 from phantom.analysis.features.diversity_plots import DiversityVisualizer
-from phantom.analysis.features.tools.matrix import derive_patient_id
-from phantom.config.features import FeatureConfigManager
+from phantom.analysis.features.phabox2.matrix import derive_patient_id
+from phantom.config.feature_versions import FeatureConfigManager
 
 TOOL_FEATURE_COL = {"phagcn": "genus", "cherry": "ncbi_genus"}
 TOOL_TITLES = {"phagcn": "Phage genus", "cherry": "Bacterial host genus"}
@@ -166,7 +166,7 @@ class DiversityAnalyzer:
             allergy_only_path = out_dir / f"{tool}_allergy_only_{TOOL_UNIT_NAMES[tool]}.csv"
             allergy_only.to_csv(allergy_only_path, sep=";", index=False)
 
-        from phantom.analysis.classification.analytics.saver import ExperimentSaver
+        from phantom.analysis.classification.reporting.saver import ExperimentSaver
 
         ExperimentSaver(exp_dir=str(out_dir)).save_metadata(
             {

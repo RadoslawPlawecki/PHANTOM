@@ -1,5 +1,8 @@
 """
-@author: Radosław Pławecki
+The unsupervised analysis of the three modalities: a distance matrix per
+modality (Jaccard for comp, Euclidean for host, Bray-Curtis for func), its
+2-D MDS embedding, and how well healthy and allergy samples separate in it
+(silhouette score, PERMANOVA).
 """
 
 import os
@@ -8,18 +11,18 @@ from datetime import datetime
 from scipy.spatial.distance import pdist, squareform
 from sklearn.manifold import MDS
 
-from phantom.analysis.classification.analytics.logger import Logger
-from phantom.analysis.classification.analytics.reporter import ReportFormatter
-from phantom.analysis.classification.analytics.saver import ExperimentSaver
-from phantom.analysis.classification.analytics.visualizer import Visualizer
-from phantom.analysis.classification.data.data_aligner import DataAligner
-from phantom.analysis.classification.data.data_loader import DataLoader
+from phantom.analysis.classification.data.alignment import ModalityAligner
 from phantom.analysis.classification.data.labeling import Labeling
-from phantom.analysis.classification.data.preprocessor import NearZeroVarianceFilter
-from phantom.analysis.classification.ml.evaluator import EvaluatorUl
+from phantom.analysis.classification.data.loading import FeatureMatrixLoader
+from phantom.analysis.classification.data.variance_filter import NearZeroVarianceFilter
+from phantom.analysis.classification.ml.evaluator import UnsupervisedEvaluator
+from phantom.analysis.classification.reporting.logger import Logger
+from phantom.analysis.classification.reporting.plots import ResultPlots
+from phantom.analysis.classification.reporting.saver import ExperimentSaver
+from phantom.analysis.classification.reporting.text_reports import ReportFormatter
 
 
-class UnsupervisedClassifier:
+class MdsAnalysis:
     def __init__(self, config):
         self.config = config
         self.logger = None
@@ -59,7 +62,7 @@ class UnsupervisedClassifier:
             "host": self.config.host,
         }
         for m in paths:
-            loader = DataLoader(input_path=paths[m], logger=self.logger)
+            loader = FeatureMatrixLoader(input_path=paths[m], logger=self.logger)
             X, labels, sample_ids = loader.load()
             nzv_filter = NearZeroVarianceFilter(logger=self.logger, threshold=4e-5)
             values, feature_names = nzv_filter.fit_transform(X)
@@ -69,7 +72,7 @@ class UnsupervisedClassifier:
                 "ids": list(sample_ids),
                 "labels": list(labels),
             }
-        self.X_data, self.labels, self.common_samples = DataAligner.align(self.X_raw)
+        self.X_data, self.labels, self.common_samples = ModalityAligner.align(self.X_raw)
         self.aligned_X = {m: self.X_data[m]["values"] for m in self.X_data}
         self.logger.info("Dataset Aligned")
 
@@ -96,7 +99,9 @@ class UnsupervisedClassifier:
 
     def _evaluate(self):
         for name, matrix in self.dist_matrix_embeddings.items():
-            self.all_metrics[name] = EvaluatorUl.evaluate(dist_matrix=matrix, labels=self.labels)
+            self.all_metrics[name] = UnsupervisedEvaluator.evaluate(
+                dist_matrix=matrix, labels=self.labels
+            )
         self.logger.info(ReportFormatter.format_unsupervised_metrics(self.all_metrics))
         self.saver.save_unsupervised_metrics(self.all_metrics)
 
@@ -113,7 +118,7 @@ class UnsupervisedClassifier:
         for name, matrix in self.dist_matrix_embeddings.items():
             self.mds_embeddings[name] = mds.fit_transform(matrix)
         plot_path = os.path.join(self.saver.exp_dir, "mds_plot.pdf")
-        Visualizer.plot_unsupervised_grid(
+        ResultPlots.plot_unsupervised_grid(
             coords_dict=self.mds_embeddings,
             y_aligned=self.labels,
             sample_ids=self.common_samples,

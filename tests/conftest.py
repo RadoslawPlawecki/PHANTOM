@@ -1,7 +1,7 @@
 """Session fixtures and test isolation for the phantom suite.
 
 See the testing strategy for rationale. Key jobs here:
-- force a headless matplotlib backend (Visualizer writes PDFs);
+- force a headless matplotlib backend (ResultPlots writes PDFs);
 - silence Optuna;
 - tear down phantom's module-global logger handlers so FileHandlers to old
   tmp dirs do not leak across tests;

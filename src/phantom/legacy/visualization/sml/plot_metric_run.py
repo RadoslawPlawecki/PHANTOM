@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: renders the metric grids of plot_metric
+for every model and validation method.
 """
 
 import pandas as pd

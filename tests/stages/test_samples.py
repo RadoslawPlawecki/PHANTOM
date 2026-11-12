@@ -43,7 +43,7 @@ def _meta(ws):
 def test_samples_are_numbered_in_row_order_linked_and_labeled(ws, ctx, sheet):
     _, files = sheet
     run_stage("preprocessing.samples", ctx)
-    links = ws.data_root / "megahit"
+    links = ws.data_root / "assemblies"
     assert sorted(p.name for p in links.glob("S*.fa")) == ["S1.fa", "S2.fa", "S3.fa"]
     for sid, f in zip(("S1", "S2", "S3"), files, strict=True):
         assert (links / f"{sid}.fa").resolve() == f.resolve()
@@ -87,7 +87,7 @@ def test_moved_files_are_accepted_on_request(ws, ctx, sheet):
     with pytest.raises(RunFileError, match="accept_changes"):
         validate_stage("preprocessing.samples", ctx)
     run_stage("preprocessing.samples", ctx, accept_changes=True)
-    assert os.readlink(ws.data_root / "megahit" / "S3.fa") == str(moved.resolve())
+    assert os.readlink(ws.data_root / "assemblies" / "S3.fa") == str(moved.resolve())
 
 
 def test_removing_a_sample_is_refused(ws, ctx, sheet):

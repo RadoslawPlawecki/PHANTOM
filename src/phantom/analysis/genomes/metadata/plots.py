@@ -1,6 +1,6 @@
 """
 Renders plots from the gathered sample metadata (the ``id``-keyed CSV managed by
-``MetadataManager``): CheckV quality counts, tool runtimes and the input-size vs.
+``MetadataTable``): CheckV quality counts, tool runtimes and the input-size vs.
 runtime relationship.
 """
 
@@ -38,7 +38,7 @@ _SHADE_KEY = ("#C9C9C9", "#8A8A8A", "#3D3D3D")
 _RUNTIME_COLS = {"vib_runtime": "VIBRANT", "vs2_runtime": "VirSorter2", "gen_runtime": "geNomad"}
 
 
-class MetadataVisualizer:
+class MetadataPlots:
     @staticmethod
     def available_plots(df: pd.DataFrame) -> list[str]:
         """Names of the plots the given metadata frame has the columns for."""
@@ -57,9 +57,9 @@ class MetadataVisualizer:
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         dispatch = {
-            "checkv_quality": ("checkv_quality_bar.pdf", MetadataVisualizer.plot_checkv_quality),
-            "runtimes": ("runtime_box.pdf", MetadataVisualizer.plot_runtimes),
-            "size_vs_runtime": ("size_vs_runtime.pdf", MetadataVisualizer.plot_size_vs_runtime),
+            "checkv_quality": ("checkv_quality_bar.pdf", MetadataPlots.plot_checkv_quality),
+            "runtimes": ("runtime_box.pdf", MetadataPlots.plot_runtimes),
+            "size_vs_runtime": ("size_vs_runtime.pdf", MetadataPlots.plot_size_vs_runtime),
         }
         written = []
         for name in names:
@@ -91,7 +91,7 @@ class MetadataVisualizer:
         of the samples.
         """
         use_latex()
-        long_df = MetadataVisualizer._checkv_long(df)
+        long_df = MetadataPlots._checkv_long(df)
         if long_df.empty:
             return
 
@@ -149,7 +149,7 @@ class MetadataVisualizer:
         )
         fig.suptitle(r"Genome Quality Control with CheckV", fontsize=16, y=0.96)
         fig.tight_layout(rect=(0, 0, 1, 0.97))
-        MetadataVisualizer._finish(fig, save_path)
+        MetadataPlots._finish(fig, save_path)
 
     @staticmethod
     def plot_runtimes(df: pd.DataFrame, save_path: Path | None = None) -> None:
@@ -183,11 +183,11 @@ class MetadataVisualizer:
         ax.set_xlabel("Tool", fontsize=14, labelpad=10)
         ax.set_ylabel("Runtime [min]", fontsize=14, labelpad=10)
         fig.tight_layout()
-        MetadataVisualizer._finish(fig, save_path)
+        MetadataPlots._finish(fig, save_path)
 
     @staticmethod
     def plot_size_vs_runtime(df: pd.DataFrame, save_path: Path | None = None) -> None:
-        """Scatter of tool runtime against MEGAHIT assembly size, one point per run."""
+        """Scatter of tool runtime against assembly size, one point per run."""
         use_latex()
         cols = [c for c in _RUNTIME_COLS if c in df.columns]
         if "megahit_size_bytes" not in df.columns or not cols:
@@ -224,7 +224,7 @@ class MetadataVisualizer:
         handles, labels = ax.get_legend_handles_labels()
         ax.legend(handles[: len(cols) + 1], labels[: len(cols) + 1], loc="upper left")
         fig.tight_layout()
-        MetadataVisualizer._finish(fig, save_path)
+        MetadataPlots._finish(fig, save_path)
 
     @staticmethod
     def _finish(fig, save_path: Path | None) -> None:

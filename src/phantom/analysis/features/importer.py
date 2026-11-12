@@ -6,7 +6,7 @@ Imports external feature sources (e.g. PhaBOX2 prediction folders) into the
 import shutil
 from pathlib import Path
 
-from phantom.config.features import FeatureConfigManager
+from phantom.config.feature_versions import FeatureConfigManager
 
 
 class FeatureImporter:

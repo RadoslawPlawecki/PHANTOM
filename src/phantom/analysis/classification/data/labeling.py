@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from phantom.analysis.genomes.metadata.mapping import MetadataManager
+from phantom.analysis.genomes.metadata.table import MetadataTable
 from phantom.config.loader import ConfigLoader
 
 LABEL_COLUMN = "label"
@@ -64,11 +64,11 @@ class Labeling:
     def default(cls) -> Labeling:
         """
         Labels from the metadata CSV configured in config.toml. Cached per
-        (path, modification time), so repeated calls (e.g. one DataLoader
+        (path, modification time), so repeated calls (e.g. one FeatureMatrixLoader
         per Optuna trial) don't re-read the file, while relabeling in the
         same session is still picked up.
         """
-        path = MetadataManager.path_from_config(ConfigLoader().load())
+        path = MetadataTable.path_from_config(ConfigLoader().load())
         mtime = path.stat().st_mtime_ns if path.is_file() else None
         return _cached_from_metadata(path, mtime)
 

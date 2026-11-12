@@ -1,6 +1,6 @@
 """
 Grouped bar-chart plots comparing healthy vs. allergic patients on
-taxonomic/host diversity metrics, one subplot per virus-identification tool.
+taxonomic/host diversity metrics, one subplot per virus identification tool.
 """
 
 from pathlib import Path

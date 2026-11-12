@@ -145,7 +145,7 @@ CASES = [
     ],
     Case(
         "classification.single",
-        outputs=["results/single-omic"],
+        outputs=["results/single-modal"],
         steps=[
             {
                 "stage": "classification.single",
@@ -162,7 +162,7 @@ CASES = [
     *[
         Case(
             f"classification.multi.{fusion}",
-            outputs=["results/multi-omic"],
+            outputs=["results/multi-modal"],
             steps=[
                 {
                     "stage": "classification.multi",
@@ -203,7 +203,7 @@ CASES = [
                 "labeling": {"strategy": "threshold", "threshold": 34},
             }
         ],
-        links=[*TOOL_INPUTS, "data/checkv", "data/megahit"],
+        links=[*TOOL_INPUTS, "data/checkv", "data/assemblies"],
         copies=[META],
         prepare=prepare_renaming_only_metadata,
         real={META: META},

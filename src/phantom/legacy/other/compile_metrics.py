@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: collects the metrics.json of every
+single- and multimodal run into one CSV table per model.
 """
 
 import os

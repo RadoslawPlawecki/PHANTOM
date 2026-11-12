@@ -1,6 +1,6 @@
 """
 Merges raw per-sample feature files (TSV/CSV) into one file per tool and
-virus-identification tool. Each sample's sequence ids are prefixed with the
+virus identification tool. Each sample's sequence ids are prefixed with the
 sample id (``S1_`` + id) and the id column is renamed ``Accession``.
 """
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from phantom.config.features import FeatureConfigManager
+from phantom.config.feature_versions import FeatureConfigManager
 
 
 class FeatureConcatenator:

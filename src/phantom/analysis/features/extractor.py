@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from phantom.analysis.features.tools.cherry import CherryFeaturePipeline
-from phantom.analysis.features.tools.phagcn import PhagcnFeaturePipeline
-from phantom.analysis.features.tools.phatyp import PhatypFeaturePipeline
-from phantom.analysis.features.tools.phavip import PhavipFeaturePipeline
-from phantom.config.features import FeatureConfigManager
+from phantom.analysis.features.phabox2.cherry import CherryFeaturePipeline
+from phantom.analysis.features.phabox2.phagcn import PhagcnFeaturePipeline
+from phantom.analysis.features.phabox2.phatyp import PhatypFeaturePipeline
+from phantom.analysis.features.phabox2.phavip import PhavipFeaturePipeline
+from phantom.config.feature_versions import FeatureConfigManager
 
 PIPELINES = {
     "cherry": CherryFeaturePipeline,

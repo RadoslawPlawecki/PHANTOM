@@ -8,7 +8,7 @@ name = "annotate_genomes"
 
 [[steps]]
 stage = "tools.checkv"
-# vtools = ["geN"]        # default: every virus-identification tool
+# vtools = ["geN"]        # default: every virus identification tool
 # samples = ["S1", "S2"]  # default: every sample
 # dry_run = true
 

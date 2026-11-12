@@ -17,14 +17,14 @@ from typing import Any
 
 import pandas as pd
 
-from phantom.analysis.genomes.metadata.labeling import (
+from phantom.analysis.genomes.metadata.label_strategies import (
     ExternalCSVLabeler,
     LabelingStrategy,
     ManualLabeler,
     PatternLabeler,
     SampleThresholdLabeler,
 )
-from phantom.analysis.genomes.metadata.mapping import MetadataManager
+from phantom.analysis.genomes.metadata.table import MetadataTable
 
 LABEL_COLUMN = "label"
 SCAN_COLUMNS = {
@@ -88,7 +88,7 @@ def build_labeler(spec: dict[str, Any], resolve) -> LabelingStrategy:
 
 def gather_metadata(
     config: dict,
-    meta: MetadataManager,
+    meta: MetadataTable,
     targets: list[str],
     labeler: LabelingStrategy | None = None,
     overwrite_labels: bool = False,
@@ -134,7 +134,7 @@ def gather_metadata(
     return written
 
 
-def collect_genomes(config: dict, meta: MetadataManager) -> pd.DataFrame:
+def collect_genomes(config: dict, meta: MetadataTable) -> pd.DataFrame:
     """
     Copies the identification tools' viral contigs into the genome registry
     and records the original/formatted file names (the "renaming" columns)

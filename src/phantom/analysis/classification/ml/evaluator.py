@@ -1,5 +1,7 @@
 """
-@author: Radosław Pławecki
+Metrics of a classification (ROC AUC, balanced accuracy, F1, precision,
+recall, PR AUC, MCC, G-mean, misclassified samples) and of the unsupervised
+analysis (silhouette, PERMANOVA) from a distance matrix.
 """
 
 from typing import ClassVar
@@ -20,7 +22,7 @@ from sklearn.metrics import (
 )
 
 
-class EvaluatorSl:
+class SupervisedEvaluator:
     METRICS: ClassVar[dict] = {
         "roc_auc": lambda yt, yp, ypb: roc_auc_score(yt, ypb),
         "bacc": lambda yt, yp, ypb: balanced_accuracy_score(yt, yp),
@@ -35,7 +37,7 @@ class EvaluatorSl:
     @staticmethod
     def evaluate(y_true, y_pred, y_prob, test_idx):
         results = {}
-        for name, metric_fn in EvaluatorSl.METRICS.items():
+        for name, metric_fn in SupervisedEvaluator.METRICS.items():
             score = metric_fn(y_true, y_pred, y_prob)
             metric_result = {"score": score}
             results[name] = metric_result
@@ -63,7 +65,7 @@ class EvaluatorSl:
         return results
 
 
-class EvaluatorUl:
+class UnsupervisedEvaluator:
     METRICS: ClassVar[dict] = {
         "silhouette": lambda dist_matrix, labels: silhouette_score(
             dist_matrix, labels, metric="precomputed"
@@ -76,7 +78,7 @@ class EvaluatorUl:
     @staticmethod
     def evaluate(dist_matrix, labels):
         results = {}
-        for name, metric_fn in EvaluatorUl.METRICS.items():
+        for name, metric_fn in UnsupervisedEvaluator.METRICS.items():
             result = metric_fn(dist_matrix, labels)
             if name == "silhouette":
                 results[name] = {"score": float(result)}

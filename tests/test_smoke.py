@@ -1,4 +1,4 @@
-"""Stage-2 sanity: the package imports and the test infrastructure loads."""
+"""Smoke test: the package imports and the test infrastructure loads."""
 
 import numpy as np
 
@@ -15,11 +15,13 @@ def test_import_phantom():
 
 def test_key_modules_import():
     from phantom.analysis.classification.data.labeling import Labeling
-    from phantom.analysis.classification.ml.evaluator import EvaluatorSl
-    from phantom.analysis.features.tools.matrix import build_matrix
-    from phantom.config.features import FeatureConfigManager
+    from phantom.analysis.classification.ml.evaluator import SupervisedEvaluator
+    from phantom.analysis.features.phabox2.matrix import build_matrix
+    from phantom.config.feature_versions import FeatureConfigManager
 
-    assert all(callable(x) for x in (Labeling.derive_label, EvaluatorSl.evaluate, build_matrix))
+    assert all(
+        callable(x) for x in (Labeling.derive_label, SupervisedEvaluator.evaluate, build_matrix)
+    )
     assert FeatureConfigManager is not None
 
 

@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Result figures of the classification runs: the ROC curve of a validation,
+and the grid of MDS embeddings of the unsupervised analysis.
 """
 
 import matplotlib.pyplot as plt
@@ -8,7 +9,7 @@ from sklearn.metrics import auc, roc_curve
 from phantom.config.plotting import use_latex
 
 
-class Visualizer:
+class ResultPlots:
     @staticmethod
     def plot_roc_curve(y_true, y_prob, title="ROC Curve", save_path=None):
         use_latex()

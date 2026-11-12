@@ -13,16 +13,16 @@ from phantom.runner.loader import RunFileError
 
 @pytest.fixture
 def fake_multi(monkeypatch):
-    import phantom.analysis.classification.execution.multi_omic as mod
+    import phantom.analysis.classification.execution.multi_modal as mod
 
-    return fake_executor(monkeypatch, mod, "MultiOmicClassifier")
+    return fake_executor(monkeypatch, mod, "MultiModalClassifier")
 
 
 @pytest.fixture
 def fake_mds(monkeypatch):
-    import phantom.analysis.classification.execution.unsupervised_classifier as mod
+    import phantom.analysis.classification.execution.mds as mod
 
-    return fake_executor(monkeypatch, mod, "UnsupervisedClassifier")
+    return fake_executor(monkeypatch, mod, "MdsAnalysis")
 
 
 def test_multi_grid_defaults_to_all_vtools(ctx):
@@ -45,14 +45,14 @@ def test_multi_grid_defaults_to_all_vtools(ctx):
         ({"fusion": "late", "optimize_weights": True, "n_trials": 7}, (True, 7)),
     ],
 )
-def test_multi_passes_the_menu_equivalent_config(ws, ctx, fake_multi, params, expected_opt):
+def test_multi_passes_the_expected_config(ws, ctx, fake_multi, params, expected_opt):
     run_stage("classification.multi", ctx, version=VERSION, vtool="VIB", model="rf", **params)
     (cfg,) = fake_multi
     assert (cfg.opt, cfg.n_trials) == expected_opt
     assert Path(cfg.comp).name == "VIB_PGN_FEAT.csv"
     assert Path(cfg.host).name == "VIB_CHR_FEAT.csv"
     assert Path(cfg.func).name == "VIB_PHA_ORFs_PHV_FEAT.csv"
-    assert Path(cfg.out_dir) == ws.root / "results" / "multi-omic" / VERSION
+    assert Path(cfg.out_dir) == ws.root / "results" / "multi-modal" / VERSION
     assert (cfg.run_loocv, cfg.run_repeated, cfg.model_type) == (True, False, "rf")
 
 

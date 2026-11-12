@@ -15,7 +15,7 @@ class MdsConfig:
 
 
 @dataclass(frozen=True)
-class SingleOmicConfig:
+class SingleModalConfig:
     in_file: str
     out_dir: str
     modality: str | None
@@ -27,7 +27,7 @@ class SingleOmicConfig:
 
 
 @dataclass(frozen=True)
-class MultiOmicConfig:
+class MultiModalConfig:
     comp: str
     host: str
     func: str

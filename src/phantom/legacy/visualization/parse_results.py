@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: reshapes a wide metrics table into long
+form (metric, model, method, modality, tool) for plotting.
 """
 
 import pandas as pd

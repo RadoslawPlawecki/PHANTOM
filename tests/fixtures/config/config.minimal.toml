@@ -18,8 +18,8 @@ func = { tool = "phavip", tag = "PHV", label = "Gene function" }
 path = "data/samples.csv"
 type = "file"
 
-[megahit]
-path = "data/megahit"
+[assemblies]
+path = "data/assemblies"
 type = "directory"
 
 [genomad]

@@ -1,18 +1,17 @@
 """
-@author: Radosław Pławecki
+One single-modal classification run end to end: load a feature matrix,
+filter it, validate a random forest / XGBoost / CatBoost classifier by
+leave-one-out and/or repeated stratified CV, and save the metrics, feature
+importances, predictions and ROC curves.
 """
 
 import os
 from datetime import datetime
 
-from phantom.analysis.classification.analytics.logger import Logger
-from phantom.analysis.classification.analytics.reporter import ReportFormatter
-from phantom.analysis.classification.analytics.saver import ExperimentSaver
-from phantom.analysis.classification.analytics.visualizer import Visualizer
-from phantom.analysis.classification.data.data_loader import DataLoader
 from phantom.analysis.classification.data.labeling import Labeling
-from phantom.analysis.classification.data.preprocessor import NearZeroVarianceFilter
-from phantom.analysis.classification.ml.evaluator import EvaluatorSl
+from phantom.analysis.classification.data.loading import FeatureMatrixLoader
+from phantom.analysis.classification.data.variance_filter import NearZeroVarianceFilter
+from phantom.analysis.classification.ml.evaluator import SupervisedEvaluator
 from phantom.analysis.classification.ml.models import (
     get_catboost_model,
     get_rf_model,
@@ -22,9 +21,13 @@ from phantom.analysis.classification.ml.validators import (
     LOOCVValidator,
     RepeatedCVValidator,
 )
+from phantom.analysis.classification.reporting.logger import Logger
+from phantom.analysis.classification.reporting.plots import ResultPlots
+from phantom.analysis.classification.reporting.saver import ExperimentSaver
+from phantom.analysis.classification.reporting.text_reports import ReportFormatter
 
 
-class SingleOmicClassifier:
+class SingleModalClassifier:
     def __init__(self, config):
         self.config = config
         self.logger = None
@@ -43,7 +46,7 @@ class SingleOmicClassifier:
 
     def _setup(self):
         _exp_dir, self.logger, self.saver = self._create_experiment()
-        self.logger.info("=== SINGLE-OMIC ALLERGY CLASSIFIER ===")
+        self.logger.info("=== SINGLE-MODAL ALLERGY CLASSIFIER ===")
         self.saver.save_metadata({**vars(self.config), "labels": Labeling.default().provenance()})
 
     def _create_experiment(self):
@@ -59,7 +62,7 @@ class SingleOmicClassifier:
         return exp_dir, logger, saver
 
     def _load(self):
-        loader = DataLoader(input_path=self.config.in_file, logger=self.logger)
+        loader = FeatureMatrixLoader(input_path=self.config.in_file, logger=self.logger)
         X, self.labels, self.sample_ids = loader.load()
         self.logger.info("Applying Near-Zero Variance Filter...")
         nzv = NearZeroVarianceFilter(logger=self.logger, threshold=4e-5)
@@ -80,9 +83,9 @@ class SingleOmicClassifier:
             self._run_validation("rcv", RepeatedCVValidator(verbose=True))
 
     def _run_validation(self, name, validator):
-        self.logger.info(f"--- SINGLE-OMIC EVALUATION: {name.upper()} ---")
+        self.logger.info(f"--- SINGLE-MODAL EVALUATION: {name.upper()} ---")
         results = validator.run(self.model, self.values, self.labels)
-        metrics = EvaluatorSl.evaluate(
+        metrics = SupervisedEvaluator.evaluate(
             results.y_true, results.y_pred, results.y_prob, results.test_idx
         )
         self._log_results(results, metrics)
@@ -121,7 +124,7 @@ class SingleOmicClassifier:
             subfolder=name,
         )
         self.saver.save_metrics(metrics, subfolder=name)
-        Visualizer.plot_roc_curve(
+        ResultPlots.plot_roc_curve(
             results.y_true,
             results.y_prob,
             title=f"ROC Curve -- {self.config.model_type.upper()} ({name.upper()})",

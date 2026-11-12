@@ -6,7 +6,7 @@ registers every stage with :mod:`phantom.runner.stage`.
     features           build feature versions: import, merge, preprocess, extract
     features_analysis  diversity, ORF function summaries
     optimization       Optuna search over feature-engineering choices
-    classification     single-omic, multi-omic fusion, MDS
+    classification     single-modal, multimodal fusion, MDS
     tools              external tools through Snakemake, and their installation
 """
 

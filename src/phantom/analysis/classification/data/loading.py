@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Loads one feature matrix (``*_FEAT.csv``: an ``id`` column, one column per
+feature) with the class label of every sample, taken from the metadata CSV.
 """
 
 import csv
@@ -12,7 +13,7 @@ import pandas as pd
 from phantom.analysis.classification.data.labeling import Labeling
 
 
-class DataLoader:
+class FeatureMatrixLoader:
     def __init__(self, input_path: str, logger=None, labeling: Labeling | None = None):
         self.input_path = Path(input_path)
         self.logger = logger

@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: grid of confusion matrices of the
+multimodal runs (early/late fusion x identification tool).
 """
 
 from project.src.plots.plots_formatting import use_latex

@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: bar charts of the most important features
+of the multimodal runs.
 """
 
 import os

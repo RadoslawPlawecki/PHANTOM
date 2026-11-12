@@ -9,7 +9,7 @@ import pandas as pd
 
 class PhatypFeaturePipeline:
     # Derives its feature matrix from the fixed TYPE column; needs no
-    # interactively chosen column (see build_feature_matrix).
+    # column chosen per run (see build_feature_matrix).
     NEEDS_FEATURE_COLUMN = False
     # Feature ratios are fixed per TYPE, not a binary/count matrix over a
     # min-patient cutoff (see build_feature_matrix).
@@ -32,7 +32,7 @@ class PhatypFeaturePipeline:
         min_patients: int | None = None,
     ) -> pd.DataFrame:
         # feature_col/binary/min_patients are unused: TYPE is the only
-        # feature axis, not interactively chosen. Kept for a uniform
+        # feature axis, not chosen per run. Kept for a uniform
         # pipeline interface.
         df = df.copy()
         df["id"] = df["Accession"].str.split("_").str[0]

@@ -20,10 +20,10 @@ from sklearn.model_selection import RepeatedStratifiedKFold
 from tqdm import tqdm
 
 from phantom.analysis.classification.data.labeling import Labeling
-from phantom.analysis.classification.data.preprocessor import NearZeroVarianceFilter
-from phantom.analysis.features.tools.matrix import derive_patient_id, filter_accessions
+from phantom.analysis.classification.data.variance_filter import NearZeroVarianceFilter
+from phantom.analysis.features.phabox2.matrix import derive_patient_id, filter_accessions
 
-from ..search_core import APPLY_FNS, MODEL_FACTORIES, SEARCH_FNS
+from ..search import APPLY_FNS, MODEL_FACTORIES, SEARCH_FNS
 
 
 @dataclass

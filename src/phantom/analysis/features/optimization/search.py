@@ -25,13 +25,13 @@ from phantom.analysis.classification.ml.models import (
     get_rf_model,
     get_xgb_model,
 )
-from phantom.analysis.classification.ml.optimizer import FeatureExtractionOptimizer
 from phantom.analysis.classification.ml.validators import LOOCVValidator, RepeatedCVValidator
-from phantom.analysis.features.tools.cherry import CherryFeaturePipeline
-from phantom.analysis.features.tools.matrix import build_taxonomy_matrix
-from phantom.analysis.features.tools.phagcn import PhagcnFeaturePipeline
-from phantom.analysis.features.tools.phavip import PhavipFeaturePipeline
-from phantom.analysis.features.tools.utils import apply_mask, load_file
+from phantom.analysis.features.optimization.scoring import FeatureConfigScorer
+from phantom.analysis.features.phabox2.cherry import CherryFeaturePipeline
+from phantom.analysis.features.phabox2.loading import apply_mask, load_file
+from phantom.analysis.features.phabox2.matrix import build_taxonomy_matrix
+from phantom.analysis.features.phabox2.phagcn import PhagcnFeaturePipeline
+from phantom.analysis.features.phabox2.phavip import PhavipFeaturePipeline
 
 MODEL_FACTORIES = {
     "catboost": get_catboost_model,
@@ -117,9 +117,7 @@ def run_study(
 ):
     model = MODEL_FACTORIES[model_name](use_smote=use_smote)
     validator = VALIDATORS[validator_name](verbose=False)
-    optimizer = FeatureExtractionOptimizer(
-        model=model, validator=validator, target_metric=target_metric
-    )
+    optimizer = FeatureConfigScorer(model=model, validator=validator, target_metric=target_metric)
 
     def wrapped_objective(trial):
         return objective_callable(trial, optimizer=optimizer)
@@ -173,7 +171,7 @@ def apply_phagcn_config(
 
 
 def phagcn_objective(
-    trial, preprocessed_df: pd.DataFrame, optimizer: FeatureExtractionOptimizer, y_override=None
+    trial, preprocessed_df: pd.DataFrame, optimizer: FeatureConfigScorer, y_override=None
 ) -> float:
     binary_repr = trial.suggest_categorical("binary", [True, False])
     min_patients = trial.suggest_int("min_patients", 1, 10)
@@ -229,7 +227,7 @@ def apply_cherry_config(
 
 
 def cherry_objective(
-    trial, preprocessed_df: pd.DataFrame, optimizer: FeatureExtractionOptimizer, y_override=None
+    trial, preprocessed_df: pd.DataFrame, optimizer: FeatureConfigScorer, y_override=None
 ) -> float:
     binary_repr = trial.suggest_categorical("binary", [True, False])
     min_patients = trial.suggest_int("min_patients", 1, 10)
@@ -286,7 +284,7 @@ def apply_phavip_config(
 
 
 def phavip_objective(
-    trial, df: pd.DataFrame, optimizer: FeatureExtractionOptimizer, y_override=None
+    trial, df: pd.DataFrame, optimizer: FeatureConfigScorer, y_override=None
 ) -> float:
     min_coverage = trial.suggest_float("min_coverage", 0.5, 1.0)
     min_pident = trial.suggest_float("min_pident", 0.3, 1.0)

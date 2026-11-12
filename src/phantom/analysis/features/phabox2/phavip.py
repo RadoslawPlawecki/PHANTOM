@@ -14,7 +14,7 @@ from .matrix import derive_patient_id
 
 class PhavipFeaturePipeline:
     # Derives its own functional categories from Annotation text; needs no
-    # interactively chosen column (see build_feature_matrix).
+    # column chosen per run (see build_feature_matrix).
     NEEDS_FEATURE_COLUMN = False
     # Feature ratios are fixed per category, not a binary/count matrix
     # over a min-patient cutoff (see build_feature_matrix).
@@ -87,7 +87,7 @@ class PhavipFeaturePipeline:
         feature_columns: list[str] | None = None,
     ) -> pd.DataFrame:
         # feature_col/binary/min_patients are unused: categories are fixed
-        # (see CATEGORY_PATTERNS), not interactively chosen. Kept for a
+        # (see CATEGORY_PATTERNS), not chosen per run. Kept for a
         # uniform pipeline interface.
         df = df.copy()
         df["id"] = derive_patient_id(df["Accession"])

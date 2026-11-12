@@ -91,10 +91,10 @@ def build_index(root):
     return {get_sample_id(f): f for f in root_path.iterdir() if f.is_dir()}
 
 
-def build_megahit_index(root):
+def build_assembly_index(root):
     root_path = Path(root)
     if not root_path.exists() or not root_path.is_dir():
-        print(f"[WARNING] MEGAHIT directory not found: '{root_path}'. Skipping size metrics.")
+        print(f"[WARNING] Assembly directory not found: '{root_path}'. Skipping size metrics.")
         return {}
     # S<n>.fa, linked by preprocessing.samples (stat() follows the link: real sizes)
     return {f.stem: f for f in root_path.glob("S*.fa") if re.fullmatch(r"S\d+", f.stem)}
@@ -170,19 +170,19 @@ def scan_metadata(config: dict) -> pd.DataFrame:
     vib_path = path(config, "vibrant")
     vs2_path = path(config, "virsorter2")
     gen_path = path(config, "genomad")
-    megahit_path = path(config, "megahit")
+    assembly_path = path(config, "assemblies")
     checkv_base = path(config, "checkv")
 
     vib_root = build_index(vib_path)
     vs2_root = build_index(vs2_path)
     gen_root = build_index(gen_path)
-    megahit_root = build_megahit_index(megahit_path)
+    assembly_root = build_assembly_index(assembly_path)
 
     checkv_vib = build_checkv_index(checkv_base / "vibrant")
     checkv_vs2 = build_checkv_index(checkv_base / "virsorter2")
     checkv_gen = build_checkv_index(checkv_base / "genomad")
 
-    sample_ids = set(vib_root) | set(vs2_root) | set(gen_root) | set(megahit_root)
+    sample_ids = set(vib_root) | set(vs2_root) | set(gen_root) | set(assembly_root)
     results = {sid: {"id": sid} for sid in sample_ids}
 
     for sid, folder in vib_root.items():
@@ -196,7 +196,7 @@ def scan_metadata(config: dict) -> pd.DataFrame:
     for sid, folder in gen_root.items():
         results[sid]["gen_runtime"] = runtime_genomad(folder)
 
-    for sid, file in megahit_root.items():
+    for sid, file in assembly_root.items():
         b, mb = get_file_size(file)
         results[sid]["megahit_size_bytes"] = b
         results[sid]["megahit_size_mb"] = mb

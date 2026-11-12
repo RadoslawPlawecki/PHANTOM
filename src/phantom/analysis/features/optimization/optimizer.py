@@ -13,7 +13,7 @@ import pandas as pd
 
 from phantom.analysis.classification.data.labeling import Labeling
 
-from .search_core import RunConfig
+from .search import RunConfig
 from .strategies.exploratory import run_exploratory
 
 
@@ -34,13 +34,13 @@ def run_optimization(
 ) -> None:
     """
     Runs the evaluation strategies of ``mode`` on an already loaded and
-    masked dataframe (see search_core.load_masked) and saves everything
+    masked dataframe (see search.load_masked) and saves everything
     under ``out_dir``. Knobs a mode does not use must be None, so the
     recorded metadata only shows what actually applied.
     """
     os.makedirs(out_dir, exist_ok=True)
 
-    from phantom.analysis.classification.analytics.saver import ExperimentSaver
+    from phantom.analysis.classification.reporting.saver import ExperimentSaver
 
     ExperimentSaver(exp_dir=str(out_dir)).save_metadata(
         {
@@ -107,9 +107,9 @@ def _run_mode_nested(
     inner_trials: int | None,
     top_k_features: int,
 ) -> None:
-    from phantom.analysis.classification.analytics.reporter import ReportFormatter
-    from phantom.analysis.classification.analytics.saver import ExperimentSaver
-    from phantom.analysis.classification.ml.evaluator import EvaluatorSl
+    from phantom.analysis.classification.ml.evaluator import SupervisedEvaluator
+    from phantom.analysis.classification.reporting.saver import ExperimentSaver
+    from phantom.analysis.classification.reporting.text_reports import ReportFormatter
 
     from .strategies.nested_cv import run_nested_cv
 
@@ -125,10 +125,10 @@ def _run_mode_nested(
         inner_trials=inner_trials,
         top_k=top_k_features,
     )
-    full_metrics = EvaluatorSl.evaluate(
+    full_metrics = SupervisedEvaluator.evaluate(
         result.full.y_true, result.full.y_pred, result.full.y_prob, result.full.patient_ids
     )
-    ablation_metrics = EvaluatorSl.evaluate(
+    ablation_metrics = SupervisedEvaluator.evaluate(
         result.ablation.y_true,
         result.ablation.y_pred,
         result.ablation.y_prob,
@@ -181,7 +181,7 @@ def _run_mode_permutation(
     permutation_trials: int | None,
     observed_score: float | None = None,
 ) -> None:
-    from phantom.analysis.classification.analytics.reporter import ReportFormatter
+    from phantom.analysis.classification.reporting.text_reports import ReportFormatter
 
     from .strategies.permutation_search import run_permutation_test
 

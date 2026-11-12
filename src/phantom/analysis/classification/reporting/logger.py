@@ -1,5 +1,7 @@
 """
-@author: Radosław Pławecki
+The experiment log: one logger per classification run, writing to the
+console and to a log file in the run's output folder; ``log_tqdm`` prints
+without breaking an active progress bar.
 """
 
 import logging

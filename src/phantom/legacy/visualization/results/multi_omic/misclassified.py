@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: heatmaps of which samples the
+multimodal runs misclassify, per identification tool and fusion.
 """
 
 from project.src.plots.plots_formatting import use_latex

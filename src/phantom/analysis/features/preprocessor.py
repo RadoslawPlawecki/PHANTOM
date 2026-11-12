@@ -6,12 +6,12 @@ extraction step, optionally keeping only contigs in a CheckV mask.
 
 from pathlib import Path
 
-from phantom.analysis.features.tools.cherry import CherryFeaturePipeline
-from phantom.analysis.features.tools.phagcn import PhagcnFeaturePipeline
-from phantom.analysis.features.tools.phatyp import PhatypFeaturePipeline
-from phantom.analysis.features.tools.phavip import PhavipFeaturePipeline
-from phantom.analysis.features.tools.utils import apply_mask, load_file
-from phantom.config.features import FeatureConfigManager
+from phantom.analysis.features.phabox2.cherry import CherryFeaturePipeline
+from phantom.analysis.features.phabox2.loading import apply_mask, load_file
+from phantom.analysis.features.phabox2.phagcn import PhagcnFeaturePipeline
+from phantom.analysis.features.phabox2.phatyp import PhatypFeaturePipeline
+from phantom.analysis.features.phabox2.phavip import PhavipFeaturePipeline
+from phantom.config.feature_versions import FeatureConfigManager
 from phantom.config.loader import ConfigLoader
 
 PIPELINES = {

@@ -1,5 +1,8 @@
 """
-@author: Radosław Pławecki
+Cross-validation schemes: leave-one-out and repeated stratified k-fold,
+for single-modal data and for early and late fusion. Each returns the
+out-of-fold predictions of every sample and the feature importances
+averaged over the folds.
 """
 
 from abc import ABC, abstractmethod
@@ -39,7 +42,7 @@ class LOOCVValidator(BaseValidator):
         loo = LeaveOneOut()
         y_true, y_pred, y_prob, all_test_idx = [], [], [], []
         feat_importances = np.zeros(X.shape[1])
-        it = tqdm(loo.split(X), total=len(y), desc="Single-Omic LOOCV", disable=not self.verbose)
+        it = tqdm(loo.split(X), total=len(y), desc="Single-Modal LOOCV", disable=not self.verbose)
         for train_idx, test_idx in it:
             model_wrapper.fit(X[train_idx], y[train_idx])
             y_pred.append(model_wrapper.predict(X[test_idx])[0])
@@ -72,7 +75,7 @@ class RepeatedCVValidator(BaseValidator):
         it = tqdm(
             self.cv.split(X, y),
             total=self.cv.get_n_splits(X, y),
-            desc="Single-Omic Repeated CV",
+            desc="Single-Modal Repeated CV",
             disable=not self.verbose,
         )
         for fold_id, (train_idx, test_idx) in enumerate(it):
@@ -133,7 +136,7 @@ class LateFusionRepeatedCVValidator(BaseValidator):
         it = tqdm(
             self.cv.split(any_values, y),
             total=total,
-            desc="Multi-Omic Late Fusion Repeated CV",
+            desc="Multimodal Late Fusion Repeated CV",
             disable=not self.verbose,
         )
         for fold_id, (train_idx, test_idx) in enumerate(it):
@@ -196,7 +199,7 @@ class LateFusionLOOCVValidator(BaseValidator):
         it = tqdm(
             loo.split(any_values),
             total=len(y),
-            desc="Multi-Omic Late Fusion LOOCV",
+            desc="Multimodal Late Fusion LOOCV",
             disable=not self.verbose,
         )
         for train_idx, test_idx in it:
@@ -247,7 +250,7 @@ class EarlyFusionLOOCVValidator(BaseValidator):
         it = tqdm(
             loo.split(X_fused),
             total=len(y),
-            desc="Multi-Omic Early Fusion LOOCV",
+            desc="Multimodal Early Fusion LOOCV",
             disable=not self.verbose,
         )
         for train_idx, test_idx in it:
@@ -302,7 +305,7 @@ class EarlyFusionRepeatedCVValidator(BaseValidator):
         it = tqdm(
             self.cv.split(X_fused, y),
             total=total_splits,
-            desc="Multi-Omic Early Fusion Repeated CV",
+            desc="Multimodal Early Fusion Repeated CV",
             disable=not self.verbose,
         )
         for fold_id, (train_idx, test_idx) in enumerate(it):

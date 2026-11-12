@@ -1,11 +1,13 @@
 """
-@author: Radosław Pławecki
+Aligns the modalities of a multimodal run on the samples they have in
+common, so the feature blocks share one row order and one label vector
+(an error if a sample's label differs between modalities).
 """
 
 import numpy as np
 
 
-class DataAligner:
+class ModalityAligner:
     @staticmethod
     def align(X_raw: dict) -> tuple[dict, np.ndarray, list]:
         modalities = list(X_raw.keys())

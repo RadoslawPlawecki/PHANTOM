@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: one metric compared across several result
+tables, as a line plot.
 """
 
 from project.src.plots.plots_formatting import use_latex

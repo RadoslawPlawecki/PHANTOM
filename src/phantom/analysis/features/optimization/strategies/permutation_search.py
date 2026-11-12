@@ -15,9 +15,9 @@ from tqdm import tqdm
 
 from phantom.analysis.classification.data.labeling import Labeling
 from phantom.analysis.classification.ml.significance import Significance
-from phantom.analysis.features.tools.matrix import derive_patient_id, filter_accessions
+from phantom.analysis.features.phabox2.matrix import derive_patient_id, filter_accessions
 
-from ..search_core import DEFAULT_TRIALS, SEARCH_FNS
+from ..search import DEFAULT_TRIALS, SEARCH_FNS
 
 
 @dataclass

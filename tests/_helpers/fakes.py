@@ -1,4 +1,4 @@
-"""Deterministic stand-ins for the slow / interactive parts of the pipeline.
+"""Deterministic stand-ins for the slow parts of the pipeline (estimators, validators).
 
 - ``FakeEstimator``  -- instant, seedless replacement for rf/xgb/catboost.
 - ``FakeValidator``  -- one train-on-all / predict-on-all pass, no CV loop.
@@ -41,7 +41,7 @@ class FakeEstimator(BaseEstimator, ClassifierMixin):
 class FakeValidator:
     """Drop-in for LOOCVValidator / RepeatedCVValidator in fast tests: fits
     the wrapper once on everything and predicts on everything. Returns a real
-    ``CVResults`` so downstream EvaluatorSl.evaluate works unchanged."""
+    ``CVResults`` so downstream SupervisedEvaluator.evaluate works unchanged."""
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose

@@ -1,11 +1,11 @@
 """
-External-tool stages -- replace scripts/run_*.sh. Each stage runs one target
+External-tool stages: each stage runs one target
 rule of ``workflow/Snakefile`` through Snakemake, which skips outputs that are
 up to date and runs independent samples in parallel. Everything
 machine-specific (databases, conda environments, threads, tool checkouts)
 comes from config.toml.
 
-``tools.genomad`` / ``tools.vibrant`` / ``tools.virsorter2``  MEGAHIT -> viral contigs
+``tools.genomad`` / ``tools.vibrant`` / ``tools.virsorter2``  assemblies -> viral contigs
 ``tools.checkv``      genome quality per collected genome file
 ``tools.phanotate``   ORFs (gff -> bed -> fna -> faa) per genome file
 ``tools.phabox2``     cherry / phagcn on genomes, phavip on PHANOTATE ORFs
@@ -27,7 +27,7 @@ from phantom.runner.stage import RunContext, Stage, register
 IDENTIFIERS = ("genomad", "vibrant", "virsorter2")
 PHABOX2_TASKS = ("cherry", "phagcn", "phavip")
 SAMPLES_HELP = 'sample ids to run, e.g. ["S1", "S2"]; default: every sample found'
-VTOOLS_HELP = "virus-identification tools (keys of [tools]); default: all"
+VTOOLS_HELP = "virus identification tools (keys of [tools]); default: all"
 CORES_HELP = "Snakemake --cores (parallel jobs x threads); default: [workflow].cores"
 DRY_RUN_HELP = "only print what Snakemake would run (nothing is executed or stamped)"
 SETUP_TOOLS = (
@@ -79,7 +79,7 @@ def snakemake_config(
     tags = {m["tool"]: m["tag"] for m in ctx.modalities.values()}
     return {
         "paths": {
-            "megahit": str(sec("megahit")),
+            "assemblies": str(sec("assemblies")),
             **{name: str(sec(name)) for name in IDENTIFIERS},
             "genomes": str(sec("genomes")),
             "checkv": str(sec("checkv")),
@@ -169,22 +169,22 @@ class _Identify(Stage):
     def validate(self, p: IdentifyParams, ctx: RunContext) -> list[str]:
         # [envs] / [software] entries are optional: without them the pinned
         # workflow/envs/<tool>.yaml environment and the bioconda package are used.
-        keys = [(self.tool, "path"), ("megahit", "path")]
+        keys = [(self.tool, "path"), ("assemblies", "path")]
         keys += [("threads", self.tool), ("workflow", "snakemake")]
         keys += [("databases", "genomad")] if self.tool == "genomad" else []
         return _require(ctx, keys)
 
     def check_inputs(self, p: IdentifyParams, ctx: RunContext) -> list[str]:
-        megahit = ctx.section_path("megahit")
-        if not megahit.is_dir() or not any(megahit.glob("S*.fa")):
-            return [f"no assemblies (S<n>.fa) in {megahit} -- run preprocessing.samples first"]
+        assemblies = ctx.section_path("assemblies")
+        if not assemblies.is_dir() or not any(assemblies.glob("S*.fa")):
+            return [f"no assemblies (S<n>.fa) in {assemblies} -- run preprocessing.samples first"]
         return []
 
     def label(self, p: IdentifyParams) -> str:
         return ", ".join(p.samples) if p.samples else "all samples"
 
     def inputs(self, p: IdentifyParams, ctx: RunContext) -> list[Path]:
-        return [ctx.section_path("megahit")]
+        return [ctx.section_path("assemblies")]
 
     def writes(self, p: IdentifyParams, ctx: RunContext) -> list[Path]:
         return [ctx.section_path(self.tool)]
@@ -197,21 +197,21 @@ class _Identify(Stage):
 @register
 class Genomad(_Identify):
     name = "tools.genomad"
-    summary = "geNomad end-to-end on every MEGAHIT assembly"
+    summary = "geNomad end-to-end on every assembly"
     tool = "genomad"
 
 
 @register
 class Vibrant(_Identify):
     name = "tools.vibrant"
-    summary = "VIBRANT on every MEGAHIT assembly"
+    summary = "VIBRANT on every assembly"
     tool = "vibrant"
 
 
 @register
 class Virsorter2(_Identify):
     name = "tools.virsorter2"
-    summary = "VirSorter2 on every MEGAHIT assembly"
+    summary = "VirSorter2 on every assembly"
     tool = "virsorter2"
 
 

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
-from phantom.config.features import FeatureConfigManager
+from phantom.config.feature_versions import FeatureConfigManager
 from phantom.config.loader import ConfigLoader
 
 

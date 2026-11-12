@@ -10,11 +10,11 @@ from .matrix import build_taxonomy_matrix
 
 
 class PhagcnFeaturePipeline:
-    # Its feature matrix is built over an interactively chosen taxonomy
-    # column (see build_feature_matrix).
+    # Its feature matrix is built over a taxonomy column chosen per run
+    # (features.extract's feature_col; see build_feature_matrix).
     NEEDS_FEATURE_COLUMN = True
-    # binary/min_patients for the feature matrix are also interactively
-    # chosen (see build_feature_matrix), analogous to feature_col above.
+    # binary/min_patients for the feature matrix are also chosen per run
+    # (see build_feature_matrix), analogous to feature_col above.
     NEEDS_MATRIX_OPTIONS = True
 
     def __init__(self, min_phagcn_score: float = 0.5, min_patients: int = 4, binary: bool = True):

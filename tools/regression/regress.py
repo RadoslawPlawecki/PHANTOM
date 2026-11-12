@@ -1,5 +1,5 @@
 """
-Legacy-vs-new regression checks for the menu -> run-file migration.
+Regression checks: does every stage still produce the recorded results on the real data?
 
     python tools/regression/regress.py list
     python tools/regression/regress.py baseline CASE|PREFIX ... [--repeat]

@@ -1,35 +1,38 @@
 """
-@author: Radosław Pławecki
+One multimodal classification run end-to-end: align the comp, host and
+func feature matrices, fuse them (early: concatenated features; late:
+weighted average of per-modality classifiers, weights optionally optimized
+with Optuna), validate, and save the results.
 """
 
 import os
 from datetime import datetime
 
-from phantom.analysis.classification.analytics.logger import Logger
-from phantom.analysis.classification.analytics.reporter import ReportFormatter
-from phantom.analysis.classification.analytics.saver import ExperimentSaver
-from phantom.analysis.classification.analytics.visualizer import Visualizer
-from phantom.analysis.classification.data.data_aligner import DataAligner
-from phantom.analysis.classification.data.data_loader import DataLoader
+from phantom.analysis.classification.data.alignment import ModalityAligner
 from phantom.analysis.classification.data.labeling import Labeling
-from phantom.analysis.classification.data.preprocessor import NearZeroVarianceFilter
-from phantom.analysis.classification.ml.evaluator import EvaluatorSl
+from phantom.analysis.classification.data.loading import FeatureMatrixLoader
+from phantom.analysis.classification.data.variance_filter import NearZeroVarianceFilter
+from phantom.analysis.classification.ml.evaluator import SupervisedEvaluator
+from phantom.analysis.classification.ml.fusion_weights import LateFusionWeightOptimizer
 from phantom.analysis.classification.ml.models import (
-    MultiOmicModel,
+    MultiModalModel,
     get_catboost_model,
     get_rf_model,
     get_xgb_model,
 )
-from phantom.analysis.classification.ml.optimizer import LateFusionWeightOptimizer
 from phantom.analysis.classification.ml.validators import (
     EarlyFusionLOOCVValidator,
     EarlyFusionRepeatedCVValidator,
     LateFusionLOOCVValidator,
     LateFusionRepeatedCVValidator,
 )
+from phantom.analysis.classification.reporting.logger import Logger
+from phantom.analysis.classification.reporting.plots import ResultPlots
+from phantom.analysis.classification.reporting.saver import ExperimentSaver
+from phantom.analysis.classification.reporting.text_reports import ReportFormatter
 
 
-class MultiOmicClassifier:
+class MultiModalClassifier:
     def __init__(self, config):
         self.config = config
         self.logger = None
@@ -59,7 +62,7 @@ class MultiOmicClassifier:
         fusion_name = {"early": "EARLY FUSION", "late": "LATE FUSION"}.get(self.config.fusion)
         if fusion_name is None:
             raise ValueError(f"Unsupported fusion strategy: {self.config.fusion}")
-        self.logger.info(f"=== MULTI-OMIC ALLERGY CLASSIFIER ({fusion_name}) ===")
+        self.logger.info(f"=== MULTIMODAL ALLERGY CLASSIFIER ({fusion_name}) ===")
         self.saver.save_metadata({**vars(self.config), "labels": Labeling.default().provenance()})
 
     def _create_experiment(self):
@@ -78,7 +81,7 @@ class MultiOmicClassifier:
             "host": self.config.host,
         }
         for m in paths:
-            loader = DataLoader(input_path=paths[m], logger=self.logger)
+            loader = FeatureMatrixLoader(input_path=paths[m], logger=self.logger)
             X, labels, sample_ids = loader.load()
             nzv = NearZeroVarianceFilter(logger=self.logger, threshold=4e-5)
             values, feature_names = nzv.fit_transform(X)
@@ -88,7 +91,7 @@ class MultiOmicClassifier:
                 "ids": list(sample_ids),
                 "labels": list(labels),
             }
-        self.X_data, self.labels, self.common_samples = DataAligner.align(self.X_raw)
+        self.X_data, self.labels, self.common_samples = ModalityAligner.align(self.X_raw)
         self.feature_names_dict = {m: self.X_data[m]["feature_names"] for m in self.X_data}
         self.sample_ids = sample_ids
         self.logger.info("Datasets Aligned")
@@ -106,7 +109,7 @@ class MultiOmicClassifier:
                 m: self.model_factories[self.config.model_type](use_smote=self.config.use_smote)
                 for m in self.X_data
             }
-            self.model = MultiOmicModel(models_dict=fusion_models, weights=weights)
+            self.model = MultiModalModel(models_dict=fusion_models, weights=weights)
             self.loocv = LateFusionLOOCVValidator(verbose=True)
             self.rcv = LateFusionRepeatedCVValidator(n_splits=5, n_repeats=5, verbose=True)
         else:
@@ -144,9 +147,9 @@ class MultiOmicClassifier:
             self._run_validation("rcv", self.rcv)
 
     def _run_validation(self, name, validator):
-        self.logger.info(f"--- MULTI-OMIC EVALUATION: {name.upper()} ---")
+        self.logger.info(f"--- MULTIMODAL EVALUATION: {name.upper()} ---")
         results = validator.run(self.model, self.X_data, self.labels)
-        metrics = EvaluatorSl.evaluate(
+        metrics = SupervisedEvaluator.evaluate(
             results.y_true, results.y_pred, results.y_prob, results.test_idx
         )
         self._log_results(results, metrics)
@@ -193,7 +196,7 @@ class MultiOmicClassifier:
             subfolder=name,
         )
         self.saver.save_metrics(metrics, subfolder=name)
-        Visualizer.plot_roc_curve(
+        ResultPlots.plot_roc_curve(
             results.y_true,
             results.y_prob,
             title=f"ROC Curve -- {self.config.model_type.upper()} {self.config.fusion.upper()} FUSION ({name.upper()})",

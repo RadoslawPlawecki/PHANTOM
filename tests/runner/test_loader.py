@@ -1,3 +1,5 @@
+"""Run files -> jobs: parsing, --set overrides, grids, and every error at once."""
+
 from __future__ import annotations
 
 import pytest

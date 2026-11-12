@@ -1,15 +1,14 @@
 """
 External bioinformatics tools of the PHANTOM pipeline, as one Snakemake
-workflow -- replaces scripts/run_*.sh. Driven by `phantom run` (stages
+workflow. Driven by `phantom run` (stages
 tools.*), which passes everything machine-specific through --configfile,
 built from config.toml: absolute paths, databases, conda environments and
 thread counts. Nothing here is hardcoded to one machine.
 
-    MEGAHIT assemblies --> genomad / vibrant / virsorter2          (per sample)
+    assemblies (S<n>.fa) --> genomad / vibrant / virsorter2          (per sample)
     genomes/<tool>/*.fna --> checkv, phabox2 cherry|phagcn, phanotate
     phanotate ORFs --> phabox2 phavip
 
-Each shell command is the one the corresponding scripts/run_*.sh ran.
 Target rules (all_<tool>) select what to build; Snakemake skips outputs that
 are up to date and runs independent samples in parallel (--cores).
 
@@ -60,7 +59,7 @@ def keep(sample):
 def assemblies():
     """sample -> assembly: the S<n>.fa links preprocessing.samples makes."""
     found = {}
-    for f in sorted(glob.glob(f"{P['megahit']}/S*.fa")):
+    for f in sorted(glob.glob(f"{P['assemblies']}/S*.fa")):
         sample = Path(f).stem
         if re.fullmatch(r"S\d+", sample) and keep(sample):
             found[sample] = f
@@ -132,7 +131,7 @@ rule all_phabox2_phavip:
         ],
 
 
-# --- virus identification (scripts/run_genomad|vibrant|virsorter2.sh) ---------
+# --- virus identification (geNomad, VIBRANT, VirSorter2) ------------------------
 
 
 rule genomad:
@@ -175,7 +174,7 @@ rule virsorter2:
         "virsorter run -w {output} -i {input} --provirus-off --max-orf-per-seq 20 all"
 
 
-# --- genome quality (scripts/run_checkv.sh) ------------------------------------
+# --- genome quality (CheckV) ---------------------------------------------------
 
 
 rule checkv:
@@ -192,7 +191,7 @@ rule checkv:
         "checkv end_to_end {input} {output} -d {params.db} -t {threads}"
 
 
-# --- ORF calling (scripts/run_phanotate.sh) ------------------------------------
+# --- ORF calling (PHANOTATE) ---------------------------------------------------
 
 
 rule phanotate_genes:
@@ -249,7 +248,7 @@ rule phanotate_proteins:
         "seqkit translate {input} > {output}"
 
 
-# --- PhaBOX2 (scripts/run_cherry|phagcn|phavip.sh) -----------------------------
+# --- PhaBOX2 (cherry, phagcn, phavip) -----------------------------------------
 # PhaBOX2 writes a whole working directory; only the prediction table is kept.
 
 

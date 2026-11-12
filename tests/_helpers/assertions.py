@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-# The scalar metric keys EvaluatorSl.evaluate always produces.
+# The scalar metric keys SupervisedEvaluator.evaluate always produces.
 SUPERVISED_LEARNING_METRIC_KEYS = {
     "roc_auc",
     "bacc",
@@ -25,7 +25,7 @@ SUPERVISED_LEARNING_METRIC_KEYS = {
 
 
 def assert_valid_metrics(metrics: dict) -> None:
-    """EvaluatorSl.evaluate output: every scalar metric present, numeric,
+    """SupervisedEvaluator.evaluate output: every scalar metric present, numeric,
     and in a sane range; confusion matrix internally consistent."""
     for key in SUPERVISED_LEARNING_METRIC_KEYS:
         assert key in metrics, f"missing metric {key!r}"

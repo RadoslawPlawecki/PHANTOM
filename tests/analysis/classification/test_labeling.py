@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from phantom.analysis.classification.data.labeling import Labeling
-from phantom.analysis.genomes.metadata.mapping import MetadataManager
+from phantom.analysis.genomes.metadata.table import MetadataTable
 
 pytestmark = pytest.mark.critical
 
@@ -120,18 +120,18 @@ def test_default_reads_configured_metadata_and_sees_relabeling(tmp_workspace):
 
 def test_path_from_config_requires_metadata_path():
     with pytest.raises(ValueError, match="metadata_path"):
-        MetadataManager.path_from_config({"genomes": {"path": "data/genomes"}})
+        MetadataTable.path_from_config({"genomes": {"path": "data/genomes"}})
 
 
 class TestMetadataOverwrite:
     def test_collision_still_blocked_by_default(self, tmp_path):
-        mm = MetadataManager(tmp_path / "m.csv")
+        mm = MetadataTable(tmp_path / "m.csv")
         mm.save(pd.DataFrame({"id": ["S1"], "label": [1]}))
         with pytest.raises(ValueError, match="Duplicate"):
             mm.add_metadata_columns(pd.DataFrame({"id": ["S1"], "label": [0]}))
 
     def test_overwrite_replaces_only_listed_column(self, tmp_path):
-        mm = MetadataManager(tmp_path / "m.csv")
+        mm = MetadataTable(tmp_path / "m.csv")
         mm.save(pd.DataFrame({"id": ["S1", "S2"], "x": [5, 6], "label": [1, 1]}))
         mm.add_metadata_columns(
             pd.DataFrame({"id": ["S1", "S2"], "label": [0, 1]}), overwrite={"label"}
@@ -141,7 +141,7 @@ class TestMetadataOverwrite:
         assert out["x"].tolist() == [5, 6]
 
     def test_overwrite_does_not_unlock_other_columns(self, tmp_path):
-        mm = MetadataManager(tmp_path / "m.csv")
+        mm = MetadataTable(tmp_path / "m.csv")
         mm.save(pd.DataFrame({"id": ["S1"], "x": [5], "label": [1]}))
         with pytest.raises(ValueError, match="x"):
             mm.add_metadata_columns(
@@ -152,7 +152,7 @@ class TestMetadataOverwrite:
 class TestExternalCSVLabeler:
     @staticmethod
     def _run(tmp_path, external_rows, **kwargs):
-        from phantom.analysis.genomes.metadata.labeling import ExternalCSVLabeler
+        from phantom.analysis.genomes.metadata.label_strategies import ExternalCSVLabeler
 
         csv = tmp_path / "ext.csv"
         pd.DataFrame(external_rows).to_csv(csv, index=False)
@@ -193,7 +193,7 @@ class TestExternalCSVLabeler:
         assert self._run(tmp_path, rows, join_key="geN_original_file") == {"S1": 0, "S2": 1}
 
     def test_semicolon_separated_csv(self, tmp_path):
-        from phantom.analysis.genomes.metadata.labeling import ExternalCSVLabeler
+        from phantom.analysis.genomes.metadata.label_strategies import ExternalCSVLabeler
 
         csv = tmp_path / "ext.csv"
         csv.write_text("id;label\nS1;1\nS2;0\n", encoding="utf-8")

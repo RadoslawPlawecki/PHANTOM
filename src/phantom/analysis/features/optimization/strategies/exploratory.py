@@ -8,7 +8,7 @@ import os
 
 import pandas as pd
 
-from ..search_core import SEARCH_FNS, RunConfig
+from ..search import SEARCH_FNS, RunConfig
 
 
 def run_exploratory(tool: str, df: pd.DataFrame, config: RunConfig, out_dir, file_path=None):

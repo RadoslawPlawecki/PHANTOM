@@ -1,3 +1,5 @@
+"""The phantom command: exit codes, messages, and what each subcommand prints."""
+
 from __future__ import annotations
 
 import tomllib

@@ -1,18 +1,12 @@
-# Virus identification tools
-
 [tools]
 geN = "genomad"
 VIB = "vibrant"
 VS2 = "virsorter2"
 
-# Modalities
-
 [modalities]
 comp = { tool = "phagcn", tag = "PGN", label = "Virus taxonomy" }
 host = { tool = "cherry", tag = "CHR", label = "Bacterial host prediction" }
 func = { tool = "phavip", tag = "PHV", label = "Gene function" }
-
-# Paths
 
 [samples]
 path = "data/samples.csv"
@@ -20,8 +14,8 @@ type = "file"
 description = "Sample sheet (your input): one row per sample, columns assembly,label[,id]; any file names."
 
 
-[megahit]
-path = "data/megahit"
+[assemblies]
+path = "data/assemblies"
 type = "directory"
 description = "Assemblies as S<n>.fa links to the files of the sample sheet (made by preprocessing.samples)."
 

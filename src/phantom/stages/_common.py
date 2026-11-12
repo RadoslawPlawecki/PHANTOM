@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from phantom.analysis.genomes.metadata.mapping import MetadataManager
+from phantom.analysis.genomes.metadata.table import MetadataTable
 from phantom.runner.stage import RunContext
 
 
@@ -30,7 +30,7 @@ def output_dir(out_dir: str | None, ctx: RunContext, *default_parts: str) -> Pat
 
 
 def metadata_path(ctx: RunContext) -> Path:
-    return MetadataManager.path_from_config(ctx.config)
+    return MetadataTable.path_from_config(ctx.config)
 
 
 def check_metadata(ctx: RunContext) -> list[str]:

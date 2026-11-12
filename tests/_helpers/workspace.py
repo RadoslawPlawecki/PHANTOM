@@ -1,4 +1,4 @@
-"""A throwaway on-disk data workspace for integration / controller tests.
+"""A throwaway on-disk data workspace (config.toml + data folders) for the stage tests.
 
 Lays out the sibling ``data/`` tree the pipeline expects (feature version
 9.9 with its four stage directories, plus per-vtool mask directories) next

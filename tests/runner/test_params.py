@@ -1,3 +1,5 @@
+"""Stage parameters: type checking of run-file values against the Params annotations."""
+
 from __future__ import annotations
 
 from typing import Literal

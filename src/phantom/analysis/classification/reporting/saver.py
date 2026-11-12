@@ -1,5 +1,7 @@
 """
-@author: Radosław Pławecki
+Writes a classification run's results into its output folder:
+``metadata.json`` (the run's settings and label provenance), metrics,
+feature importances, per-sample predictions and the unsupervised metrics.
 """
 
 import json

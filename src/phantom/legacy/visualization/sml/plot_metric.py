@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: grid of every classification metric for
+one model and validation method.
 """
 
 import pandas as pd

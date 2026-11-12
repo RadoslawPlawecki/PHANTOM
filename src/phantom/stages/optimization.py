@@ -122,7 +122,7 @@ class Optimize(Stage):
 
     def run(self, p: OptimizeParams, ctx: RunContext) -> list[Path]:
         from phantom.analysis.features.optimization.optimizer import run_optimization
-        from phantom.analysis.features.optimization.search_core import RunConfig, load_masked
+        from phantom.analysis.features.optimization.search import RunConfig, load_masked
 
         source = self._merged_file(p, ctx)
         if source is None:  # checked before running; kept for type narrowing

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from phantom.config.features import FeatureConfigManager
+from phantom.config.feature_versions import FeatureConfigManager
 from phantom.config.loader import ConfigLoader
 
 ORF_TAG = "FUNC"

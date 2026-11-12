@@ -1,11 +1,11 @@
 """
 Locates classification inputs: the extracted feature matrix of a given
-modality and virus-identification tool.
+modality and virus identification tool.
 """
 
 from pathlib import Path
 
-from phantom.config.features import FeatureConfigManager
+from phantom.config.feature_versions import FeatureConfigManager
 
 
 def feature_files(
@@ -24,7 +24,7 @@ def find_feature_file(
     config_mgr: FeatureConfigManager, version: str, modality_cfg: dict, vtool: str
 ) -> Path:
     """
-    The extracted feature file of one modality for one virus-identification
+    The extracted feature file of one modality for one virus identification
     tool (``<vtool>_..._<tag>_FEAT.csv``). Raises FileNotFoundError naming the
     searched directory if there is none.
     """

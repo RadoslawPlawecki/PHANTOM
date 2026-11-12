@@ -1,5 +1,5 @@
 """classification.single: validation against config/data, job grid, and the
-mapping from run-file parameters to SingleOmicConfig (real classifier faked)."""
+mapping from run-file parameters to SingleModalConfig (real classifier faked)."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ def ctx(ws) -> RunContext:
 
 @pytest.fixture
 def fake_classifier(monkeypatch):
-    """Replaces SingleOmicClassifier; records configs, creates the exp dir."""
-    import phantom.analysis.classification.execution.single_omic as mod
+    """Replaces SingleModalClassifier; records configs, creates the exp dir."""
+    import phantom.analysis.classification.execution.single_modal as mod
 
     seen = []
 
@@ -55,7 +55,7 @@ def fake_classifier(monkeypatch):
             self.saver = Saver(str(exp))
             seen.append(self.config)
 
-    monkeypatch.setattr(mod, "SingleOmicClassifier", FakeClassifier)
+    monkeypatch.setattr(mod, "SingleModalClassifier", FakeClassifier)
     return seen
 
 
@@ -117,7 +117,7 @@ def test_run_maps_params_to_classifier_config(ws, ctx, fake_classifier):
 
     (cfg,) = fake_classifier
     assert Path(cfg.in_file).name == "VIB_CHR_FEAT.csv"
-    assert Path(cfg.out_dir) == ws.root / "results" / "single-omic" / VERSION
+    assert Path(cfg.out_dir) == ws.root / "results" / "single-modal" / VERSION
     assert (cfg.modality, cfg.vtool, cfg.model_type) == ("host", "VIB", "rf")
     assert (cfg.run_loocv, cfg.run_repeated, cfg.use_smote) == (False, True, True)
     assert (out / "run.toml").is_file()

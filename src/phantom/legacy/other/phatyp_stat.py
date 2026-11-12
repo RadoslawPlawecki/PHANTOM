@@ -1,5 +1,7 @@
 """
-@author: Radosław Pławecki
+Legacy, not wired to any stage: compares PhaTYP lifestyle (temperate vs
+virulent) ratios between cases and controls with a Mann-Whitney U test
+(cases by the old S1..S34 sample-number rule).
 """
 
 import pandas as pd

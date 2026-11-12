@@ -1,4 +1,4 @@
-"""features.optimize's mapping onto FeatureOptimizer.optimize (the search is faked)."""
+"""features.optimize: parameters -> run_optimization() arguments (the search is faked)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from phantom.runner.loader import RunFileError
 @pytest.fixture
 def fake_optimize(ws, monkeypatch):
     import phantom.analysis.features.optimization.optimizer as opt
-    import phantom.analysis.features.optimization.search_core as core
+    import phantom.analysis.features.optimization.search as core
 
     merged = ws.stage_dir("raw_merged", "phagcn")
     merged.mkdir(parents=True)

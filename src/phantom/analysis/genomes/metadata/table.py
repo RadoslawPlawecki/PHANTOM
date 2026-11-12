@@ -1,6 +1,8 @@
 """
-Manages the metadata file that stores information about samples and
-dataset statistics.
+The per-sample metadata CSV (``[genomes].metadata_path``, one row per sample
+id): which file became which id, the class label, renaming columns and the
+statistics scraped from tool outputs. New columns are merged on ``id``;
+existing ones are only replaced when the caller says so.
 """
 
 from collections.abc import Iterable
@@ -11,7 +13,7 @@ import pandas as pd
 from phantom.config.loader import ConfigLoader
 
 
-class MetadataManager:
+class MetadataTable:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)

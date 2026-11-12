@@ -6,7 +6,7 @@ imports, mirroring the rest of this package (see evaluator.py).
 
 import numpy as np
 
-from .evaluator import EvaluatorSl
+from .evaluator import SupervisedEvaluator
 
 
 class Significance:
@@ -26,7 +26,7 @@ class Significance:
         majority = int(np.bincount(y).argmax())
         y_pred = np.full_like(y, fill_value=majority)
         y_prob = np.full(len(y), fill_value=float(majority))
-        metrics = EvaluatorSl.evaluate(y, y_pred, y_prob, test_idx=None)
+        metrics = SupervisedEvaluator.evaluate(y, y_pred, y_prob, test_idx=None)
         metric_value = metrics.get(target_metric, 0.0)
         if isinstance(metric_value, dict):
             metric_value = metric_value.get("score", 0.0)

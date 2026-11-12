@@ -69,6 +69,6 @@ def phavip_raw_df(rows) -> pd.DataFrame:
 
 
 def extracted_matrix(rows, feature_cols) -> pd.DataFrame:
-    """An ``id`` column plus numeric feature columns -- the shape DataLoader
+    """An ``id`` column plus numeric feature columns -- the shape FeatureMatrixLoader
     reads at the classification stage. ``rows``: list[(id, *values)]."""
     return pd.DataFrame(rows, columns=["id", *feature_cols])

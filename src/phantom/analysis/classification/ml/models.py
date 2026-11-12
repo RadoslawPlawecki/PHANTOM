@@ -1,5 +1,7 @@
 """
-@author: Radosław Pławecki
+The classifiers with their default hyperparameters, wrapped to apply SMOTE
+oversampling inside each training fold only; and the late-fusion model
+combining one classifier per modality.
 """
 
 import numpy as np
@@ -8,7 +10,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.ensemble import RandomForestClassifier
 
 
-class SingleOmicModel(BaseEstimator, ClassifierMixin):
+class SingleModalModel(BaseEstimator, ClassifierMixin):
     def __init__(self, model, use_smote=False, smote_k=2, random_state=42):
         self.model = model
         self.use_smote = use_smote
@@ -44,7 +46,7 @@ class SingleOmicModel(BaseEstimator, ClassifierMixin):
         return np.zeros(1)
 
 
-class MultiOmicModel(BaseEstimator, ClassifierMixin):
+class MultiModalModel(BaseEstimator, ClassifierMixin):
     def __init__(self, models_dict=None, weights=None):
         self.models_dict = models_dict if models_dict is not None else {}
         self.weights = weights if weights is not None else {}
@@ -83,7 +85,7 @@ def get_rf_model(use_smote=False, **params):
         "random_state": 42,
     }
     default_params.update(params)
-    return SingleOmicModel(RandomForestClassifier(**default_params), use_smote=use_smote)
+    return SingleModalModel(RandomForestClassifier(**default_params), use_smote=use_smote)
 
 
 def get_xgb_model(use_smote=False, **params):
@@ -103,7 +105,7 @@ def get_xgb_model(use_smote=False, **params):
         "random_state": 42,
     }
     default_params.update(params)
-    return SingleOmicModel(XGBClassifier(**default_params), use_smote=use_smote)
+    return SingleModalModel(XGBClassifier(**default_params), use_smote=use_smote)
 
 
 def get_catboost_model(use_smote=False, **params):
@@ -124,4 +126,4 @@ def get_catboost_model(use_smote=False, **params):
         "allow_writing_files": False,  # no catboost_info/ training logs in the cwd
     }
     default_params.update(params)
-    return SingleOmicModel(CatBoostClassifier(**default_params), use_smote=use_smote)
+    return SingleModalModel(CatBoostClassifier(**default_params), use_smote=use_smote)

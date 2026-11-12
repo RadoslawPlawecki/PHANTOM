@@ -1,6 +1,7 @@
 """
-Handles data labeling using various strategies, including manual labels,
-filename patterns, sample thresholds and CSV-based mappings.
+Labeling strategies of ``preprocessing.metadata`` -- alternatives to the
+labels of the sample sheet: a threshold on the sample number, a manual list
+of cases, a regex on the sample id, or an external id,label CSV.
 """
 
 import re

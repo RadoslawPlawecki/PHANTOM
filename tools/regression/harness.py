@@ -1,5 +1,6 @@
 """
-Regression harness for the menu -> run-file migration.
+Regression harness: proves that a code change leaves every stage's results
+on the real data unchanged.
 
 Every pipeline action ("case", cases.py) runs as a ``phantom`` run-file step
 in a throwaway sandbox workspace, and its outputs are reduced to a *manifest*
@@ -50,6 +51,21 @@ FAILED = REG_ROOT / "failed"
 SKIP_NAMES = {"run.toml"}
 SKIP_SUFFIXES = {".log"}
 TIMESTAMP = re.compile(r"\d{8}_\d{6}")
+# Output folders renamed since the baselines were recorded (new -> name in the
+# baselines): applied to output paths and to text contents (metadata.json
+# records its out_dir), so a rename alone is not a regression.
+RENAMED = {
+    "results/single-modal": "results/single-omic",
+    "results/multi-modal": "results/multi-omic",
+}
+
+
+def _as_recorded(text: str) -> str:
+    for new, old in RENAMED.items():
+        text = text.replace(new, old)
+    return text
+
+
 KEEP_SUFFIXES = {".csv", ".tsv", ".json", ".toml"}
 REDUCED_TRIALS = 3
 
@@ -80,7 +96,7 @@ def build_sandbox(case: Case) -> None:
     for rel in case.links:
         src = WORKSPACE / rel
         if not src.exists():
-            continue  # e.g. data/megahit is not present on every machine
+            continue  # e.g. data/assemblies is not present on every machine
         dst = SANDBOX / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.symlink_to(src, target_is_directory=src.is_dir())
@@ -151,7 +167,7 @@ class Patcher:
 def deterministic(p: Patcher) -> Iterator[None]:
     import optuna
 
-    from phantom.analysis.features.optimization import search_core
+    from phantom.analysis.features.optimization import search
 
     real_create = optuna.create_study
 
@@ -169,8 +185,8 @@ def deterministic(p: Patcher) -> Iterator[None]:
     real_permanova = evaluator.permanova
     p.set(evaluator, "permanova", lambda *a, **k: real_permanova(*a, **{"seed": 0, **k}))
     for name in ("CHERRY_DEFAULT_TRIALS", "PHAGCN_DEFAULT_TRIALS", "PHAVIP_DEFAULT_TRIALS"):
-        p.set(search_core, name, REDUCED_TRIALS)
-    p.set(search_core, "DEFAULT_TRIALS", dict.fromkeys(search_core.DEFAULT_TRIALS, REDUCED_TRIALS))
+        p.set(search, name, REDUCED_TRIALS)
+    p.set(search, "DEFAULT_TRIALS", dict.fromkeys(search.DEFAULT_TRIALS, REDUCED_TRIALS))
     yield
 
 
@@ -231,7 +247,9 @@ def _normalized_sha256(path: Path) -> str:
     def rounded(m: re.Match) -> bytes:
         return format(float(m.group()), ".10g").encode()
 
-    return hashlib.sha256(FLOAT.sub(rounded, path.read_bytes())).hexdigest()
+    content = _as_recorded(path.read_text(encoding="utf-8", errors="surrogateescape"))
+    data = content.encode("utf-8", errors="surrogateescape")
+    return hashlib.sha256(FLOAT.sub(rounded, data)).hexdigest()
 
 
 def _features_table_sha256(root: Path) -> str:
@@ -266,7 +284,7 @@ def manifest(case: Case) -> dict[str, dict[str, Any]]:
         for f in _iter_files(root):
             if f.name in SKIP_NAMES or f.suffix in SKIP_SUFFIXES or f.is_symlink():
                 continue
-            key = TIMESTAMP.sub("<ts>", str(f.relative_to(SANDBOX)))
+            key = _as_recorded(TIMESTAMP.sub("<ts>", str(f.relative_to(SANDBOX))))
             if key in out:
                 raise SystemExit(f"[ABORT] two outputs normalize to the same name: {key}")
             if f.suffix == ".pdf":
@@ -377,6 +395,12 @@ def check(case: Case) -> bool:
     if not baseline_path(case).is_file():
         raise SystemExit(f"[ERROR] {case.name}: no baseline recorded")
     expected = json.loads(baseline_path(case).read_text(encoding="utf-8"))["files"]
+    for key, entry in expected.items():
+        # Baselines recorded before normalized hashes existed: take it from the
+        # copy of the small text output kept next to the baseline.
+        kept = BASELINES / case.name / key
+        if "normalized_sha256" not in entry and kept.suffix in TEXT_SUFFIXES and kept.is_file():
+            entry["normalized_sha256"] = _normalized_sha256(kept)
     actual = run_new(case)
     diff = compare(expected, actual)
     if diff:

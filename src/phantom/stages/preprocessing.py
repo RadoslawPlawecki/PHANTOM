@@ -26,9 +26,9 @@ PLOTS_DIR = ("plots", "metadata")
 
 
 def _meta(ctx: RunContext):
-    from phantom.analysis.genomes.metadata.mapping import MetadataManager
+    from phantom.analysis.genomes.metadata.table import MetadataTable
 
-    return MetadataManager(MetadataManager.path_from_config(ctx.config))
+    return MetadataTable(MetadataTable.path_from_config(ctx.config))
 
 
 def _require_paths(ctx: RunContext, sections: tuple[str, ...]) -> list[str]:
@@ -64,7 +64,7 @@ class Samples(Stage):
         return ctx.resolve(p.sheet) if p.sheet else ctx.section_path("samples")
 
     def validate(self, p: SamplesParams, ctx: RunContext) -> list[str]:
-        errors = _require_paths(ctx, ("megahit",) if p.sheet else ("samples", "megahit"))
+        errors = _require_paths(ctx, ("assemblies",) if p.sheet else ("samples", "assemblies"))
         if not ctx.config.get("genomes", {}).get("metadata_path"):
             errors.append("config.toml is missing [genomes].metadata_path")
         return errors
@@ -82,7 +82,7 @@ class Samples(Stage):
         return [sheet, *(s.assembly for s in read_sheet(sheet)[0])]
 
     def writes(self, p: SamplesParams, ctx: RunContext) -> list[Path]:
-        return [ctx.section_path("megahit"), metadata_path(ctx)]
+        return [ctx.section_path("assemblies"), metadata_path(ctx)]
 
     def run(self, p: SamplesParams, ctx: RunContext) -> list[Path]:
         from phantom.analysis.genomes.samples import (
@@ -99,7 +99,7 @@ class Samples(Stage):
         errors = errors or check_against_metadata(samples, meta.load(), p.accept_changes)
         if errors:
             raise ValueError("; ".join(errors))
-        directory = ctx.section_path("megahit")
+        directory = ctx.section_path("assemblies")
         link_assemblies(samples, directory)
         meta.add_metadata_columns(metadata_frame(samples), overwrite={ASSEMBLY, LABEL})
         cases = sum(s.label for s in samples)
@@ -135,7 +135,7 @@ class Collect(Stage):
             str(ctx.section_path(t)) for t in IDENTIFIERS if not ctx.section_path(t).is_dir()
         ]
         return (
-            [f"no identification-tool output in {', '.join(missing)}"] if len(missing) == 3 else []
+            [f"no identification tool output in {', '.join(missing)}"] if len(missing) == 3 else []
         )
 
     def inputs(self, p: CollectParams, ctx: RunContext) -> list[Path]:
@@ -221,7 +221,7 @@ class Metadata(Stage):
         if "checkv" in p.targets:
             dirs.append(ctx.section_path("checkv"))
         if "sizes" in p.targets:
-            dirs.append(ctx.section_path("megahit"))
+            dirs.append(ctx.section_path("assemblies"))
         if p.labeling and p.labeling.get("strategy") == "csv":
             dirs.append(ctx.resolve(p.labeling["path"]))
         return dirs
@@ -311,12 +311,12 @@ class Visualize(Stage):
     Params = VisualizeParams
 
     def check_inputs(self, p: VisualizeParams, ctx: RunContext) -> list[str]:
-        from phantom.analysis.genomes.metadata.visualizer import MetadataVisualizer
+        from phantom.analysis.genomes.metadata.plots import MetadataPlots
 
         meta = _meta(ctx)
         if not meta.path.is_file():
             return [f"{meta.path} does not exist -- run preprocessing.collect first"]
-        available = MetadataVisualizer.available_plots(meta.load())
+        available = MetadataPlots.available_plots(meta.load())
         if not available:
             return ["the metadata has no columns to plot -- run preprocessing.metadata first"]
         return [
@@ -335,11 +335,11 @@ class Visualize(Stage):
         return [output_dir(p.out_dir, ctx, *PLOTS_DIR)]
 
     def run(self, p: VisualizeParams, ctx: RunContext) -> list[Path]:
-        from phantom.analysis.genomes.metadata.visualizer import MetadataVisualizer
+        from phantom.analysis.genomes.metadata.plots import MetadataPlots
 
         df = _meta(ctx).load()
-        names: list[str] = list(p.plots) if p.plots else MetadataVisualizer.available_plots(df)
+        names: list[str] = list(p.plots) if p.plots else MetadataPlots.available_plots(df)
         out_dir = output_dir(p.out_dir, ctx, *PLOTS_DIR)
-        for path in MetadataVisualizer.render(df, names, out_dir):
+        for path in MetadataPlots.render(df, names, out_dir):
             print(f"[INFO] {path}")
         return [out_dir]

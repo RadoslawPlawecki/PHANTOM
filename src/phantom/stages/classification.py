@@ -25,8 +25,8 @@ from phantom.stages._common import (
 )
 
 # Subdirectory of [results] per run type.
-SINGLE_OMIC_DIR = "single-omic"
-MULTI_OMIC_DIR = "multi-omic"
+SINGLE_MODAL_DIR = "single-modal"
+MULTI_MODAL_DIR = "multi-modal"
 MDS_DIR = "mds"
 # The fusion/MDS executors read exactly these three modality keys.
 FUSED_MODALITIES = ("comp", "host", "func")
@@ -86,7 +86,7 @@ def _check_fused_modalities(ctx: RunContext) -> list[str]:
 
 
 @dataclass(frozen=True)
-class SingleOmicParams:
+class SingleModalParams:
     version: str = param(help=VERSION_HELP)
     modality: str = param(help="a key of [modalities] in config.toml", grid=True)
     vtool: str = param(help=VTOOL_HELP, grid=True)
@@ -94,15 +94,15 @@ class SingleOmicParams:
     validators: list[Validator] = param(default_factory=lambda: ["loocv"])
     smote: bool = param(False, help=SMOTE_HELP)
     out_dir: str | None = param(
-        None, help="default: <[results]>/single-omic/<version>; relative = under the workspace"
+        None, help="default: <[results]>/single-modal/<version>; relative = under the workspace"
     )
 
 
 @register
-class SingleOmic(Stage):
+class SingleModal(Stage):
     name = "classification.single"
-    summary = "Single-omic classifier per modality x virus-identification tool x model"
-    Params = SingleOmicParams
+    summary = "Single-modal classifier per modality x virus identification tool x model"
+    Params = SingleModalParams
 
     def defaults(self, ctx: RunContext) -> dict:
         return {"vtool": ctx.vtools}
@@ -114,7 +114,7 @@ class SingleOmic(Stage):
             "vtool": ctx.vtools,
         }
 
-    def validate(self, p: SingleOmicParams, ctx: RunContext) -> list[str]:
+    def validate(self, p: SingleModalParams, ctx: RunContext) -> list[str]:
         errors = check_version(p.version, ctx) + check_vtool(p.vtool, ctx)
         if p.modality not in ctx.modalities:
             errors.append(
@@ -123,27 +123,29 @@ class SingleOmic(Stage):
             )
         return errors + _check_validators(p.validators)
 
-    def check_inputs(self, p: SingleOmicParams, ctx: RunContext) -> list[str]:
+    def check_inputs(self, p: SingleModalParams, ctx: RunContext) -> list[str]:
         return _check_files(ctx, p.version, [p.modality], p.vtool)
 
-    def label(self, p: SingleOmicParams) -> str:
+    def label(self, p: SingleModalParams) -> str:
         return f"{p.modality} / {p.vtool} / {p.model}"
 
-    def inputs(self, p: SingleOmicParams, ctx: RunContext) -> list[Path]:
+    def inputs(self, p: SingleModalParams, ctx: RunContext) -> list[Path]:
         # The labels are an input too: relabeling must invalidate results.
         return [_feature_input(ctx, p.version, p.modality, p.vtool), metadata_path(ctx)]
 
-    def writes(self, p: SingleOmicParams, ctx: RunContext) -> list[Path]:
-        return [output_dir(p.out_dir, ctx, SINGLE_OMIC_DIR, p.version)]
+    def writes(self, p: SingleModalParams, ctx: RunContext) -> list[Path]:
+        return [output_dir(p.out_dir, ctx, SINGLE_MODAL_DIR, p.version)]
 
-    def run(self, p: SingleOmicParams, ctx: RunContext) -> list[Path]:
-        from phantom.analysis.classification.data.config import SingleOmicConfig
-        from phantom.analysis.classification.execution.single_omic import SingleOmicClassifier
+    def run(self, p: SingleModalParams, ctx: RunContext) -> list[Path]:
+        from phantom.analysis.classification.execution.config import SingleModalConfig
+        from phantom.analysis.classification.execution.single_modal import (
+            SingleModalClassifier,
+        )
 
-        out_dir = output_dir(p.out_dir, ctx, SINGLE_OMIC_DIR, p.version)
+        out_dir = output_dir(p.out_dir, ctx, SINGLE_MODAL_DIR, p.version)
         out_dir.mkdir(parents=True, exist_ok=True)
-        classifier = SingleOmicClassifier(
-            SingleOmicConfig(
+        classifier = SingleModalClassifier(
+            SingleModalConfig(
                 in_file=str(_feature_file(ctx, p.version, p.modality, p.vtool)),
                 out_dir=str(out_dir),
                 modality=p.modality,
@@ -162,7 +164,7 @@ class SingleOmic(Stage):
 
 
 @dataclass(frozen=True)
-class MultiOmicParams:
+class MultiModalParams:
     version: str = param(help=VERSION_HELP)
     vtool: str = param(help=VTOOL_HELP, grid=True)
     fusion: Fusion = param("early", grid=True)
@@ -174,15 +176,15 @@ class MultiOmicParams:
     )
     n_trials: int = param(30, help="Optuna trials when optimize_weights = true")
     out_dir: str | None = param(
-        None, help="default: <[results]>/multi-omic/<version>; relative = under the workspace"
+        None, help="default: <[results]>/multi-modal/<version>; relative = under the workspace"
     )
 
 
 @register
-class MultiOmic(Stage):
+class MultiModal(Stage):
     name = "classification.multi"
-    summary = "Multi-omic (comp + host + func) early/late fusion classifier per vtool"
-    Params = MultiOmicParams
+    summary = "Multimodal (comp + host + func) early/late fusion classifier per vtool"
+    Params = MultiModalParams
 
     def defaults(self, ctx: RunContext) -> dict:
         return {"vtool": ctx.vtools}
@@ -190,7 +192,7 @@ class MultiOmic(Stage):
     def choices(self, ctx: RunContext) -> dict[str, list]:
         return {"version": ctx.feature_versions(), "vtool": ctx.vtools}
 
-    def validate(self, p: MultiOmicParams, ctx: RunContext) -> list[str]:
+    def validate(self, p: MultiModalParams, ctx: RunContext) -> list[str]:
         errors = check_version(p.version, ctx) + check_vtool(p.vtool, ctx)
         errors += _check_validators(p.validators)
         if p.optimize_weights and p.fusion != "late":
@@ -199,33 +201,33 @@ class MultiOmic(Stage):
             errors.append(f"n_trials must be >= 1, got {p.n_trials}")
         return errors + _check_fused_modalities(ctx)
 
-    def check_inputs(self, p: MultiOmicParams, ctx: RunContext) -> list[str]:
+    def check_inputs(self, p: MultiModalParams, ctx: RunContext) -> list[str]:
         return _check_files(ctx, p.version, FUSED_MODALITIES, p.vtool)
 
-    def label(self, p: MultiOmicParams) -> str:
+    def label(self, p: MultiModalParams) -> str:
         weights = " (tuned weights)" if p.optimize_weights else ""
         return f"{p.vtool} / {p.fusion}{weights} / {p.model}"
 
-    def inputs(self, p: MultiOmicParams, ctx: RunContext) -> list[Path]:
+    def inputs(self, p: MultiModalParams, ctx: RunContext) -> list[Path]:
         files = [_feature_input(ctx, p.version, m, p.vtool) for m in FUSED_MODALITIES]
         return [*files, metadata_path(ctx)]
 
-    def writes(self, p: MultiOmicParams, ctx: RunContext) -> list[Path]:
-        return [output_dir(p.out_dir, ctx, MULTI_OMIC_DIR, p.version)]
+    def writes(self, p: MultiModalParams, ctx: RunContext) -> list[Path]:
+        return [output_dir(p.out_dir, ctx, MULTI_MODAL_DIR, p.version)]
 
-    def run(self, p: MultiOmicParams, ctx: RunContext) -> list[Path]:
-        from phantom.analysis.classification.data.config import MultiOmicConfig
-        from phantom.analysis.classification.execution.multi_omic import MultiOmicClassifier
+    def run(self, p: MultiModalParams, ctx: RunContext) -> list[Path]:
+        from phantom.analysis.classification.execution.config import MultiModalConfig
+        from phantom.analysis.classification.execution.multi_modal import MultiModalClassifier
 
-        out_dir = output_dir(p.out_dir, ctx, MULTI_OMIC_DIR, p.version)
+        out_dir = output_dir(p.out_dir, ctx, MULTI_MODAL_DIR, p.version)
         out_dir.mkdir(parents=True, exist_ok=True)
         comp, host, func = (
             str(_feature_file(ctx, p.version, m, p.vtool)) for m in FUSED_MODALITIES
         )
         # No weight tuning is (False, 0) for the executor.
         tune = p.fusion == "late" and p.optimize_weights
-        classifier = MultiOmicClassifier(
-            MultiOmicConfig(
+        classifier = MultiModalClassifier(
+            MultiModalConfig(
                 comp=comp,
                 host=host,
                 func=func,
@@ -286,9 +288,9 @@ class Mds(Stage):
         return [output_dir(p.out_dir, ctx, MDS_DIR, p.version)]
 
     def run(self, p: MdsParams, ctx: RunContext) -> list[Path]:
-        from phantom.analysis.classification.data.config import MdsConfig
-        from phantom.analysis.classification.execution.unsupervised_classifier import (
-            UnsupervisedClassifier,
+        from phantom.analysis.classification.execution.config import MdsConfig
+        from phantom.analysis.classification.execution.mds import (
+            MdsAnalysis,
         )
 
         out_dir = output_dir(p.out_dir, ctx, MDS_DIR, p.version)
@@ -296,8 +298,6 @@ class Mds(Stage):
         comp, host, func = (
             str(_feature_file(ctx, p.version, m, p.vtool)) for m in FUSED_MODALITIES
         )
-        classifier = UnsupervisedClassifier(
-            MdsConfig(comp=comp, host=host, func=func, out_dir=str(out_dir))
-        )
+        classifier = MdsAnalysis(MdsConfig(comp=comp, host=host, func=func, out_dir=str(out_dir)))
         classifier.run()
         return [Path(classifier.saver.exp_dir)]

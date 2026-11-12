@@ -1,5 +1,7 @@
 """
-@author: Radosław Pławecki
+Plain-text summaries for the experiment log: metrics, nested-CV and
+permutation-test results, confusion matrices, the top features and the
+misclassified samples.
 """
 
 from collections import Counter

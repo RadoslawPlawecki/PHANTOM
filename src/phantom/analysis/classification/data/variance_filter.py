@@ -1,5 +1,6 @@
 """
-@author: Radosław Pławecki
+Drops near-zero-variance features: columns whose variance is below a
+threshold carry no information for the classifier.
 """
 
 import pandas as pd
