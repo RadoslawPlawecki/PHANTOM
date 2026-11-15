@@ -2,7 +2,7 @@
 # settings of the development tools (pytest, coverage, ruff, mypy, codespell).
 
 [build-system]
-requires = ["setuptools>=77.0.0", "wheel"]
+requires = ["setuptools>=84.2.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
