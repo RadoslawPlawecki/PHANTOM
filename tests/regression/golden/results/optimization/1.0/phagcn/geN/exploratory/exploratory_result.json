@@ -1,0 +1,9 @@
+{
+  "tool": "phagcn",
+  "target_metric": "mcc",
+  "best_score": 1.0,
+  "best_params": {
+    "binary": false,
+    "min_patients": 8
+  }
+}

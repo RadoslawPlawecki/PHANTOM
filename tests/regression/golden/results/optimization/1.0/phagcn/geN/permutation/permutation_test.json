@@ -1,0 +1,12 @@
+{
+  "tool": "phagcn",
+  "observed_score": 1.0,
+  "null_scores": [
+    0.0,
+    0.3535533905932738
+  ],
+  "p_value": 0.3333333333333333,
+  "baseline_score": 0.0,
+  "n_permutations": 2,
+  "permutation_trials": 2
+}

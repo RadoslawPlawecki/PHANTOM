@@ -1,0 +1,13 @@
+id,assembly,label
+S1,case/patient_01/final.contigs.fa,1
+S2,case/patient_02/final.contigs.fa,1
+S3,case/patient_03/final.contigs.fa,1
+S4,case/patient_04/final.contigs.fa,1
+S5,case/patient_05/final.contigs.fa,1
+S6,case/patient_06/final.contigs.fa,1
+S7,control/patient_07/final.contigs.fa,0
+S8,control/patient_08/final.contigs.fa,0
+S9,control/patient_09/final.contigs.fa,0
+S10,control/patient_10/final.contigs.fa,0
+S11,control/patient_11/final.contigs.fa,0
+S12,control/patient_12/final.contigs.fa,0

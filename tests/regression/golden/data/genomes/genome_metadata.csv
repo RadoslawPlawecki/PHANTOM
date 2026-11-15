@@ -1,0 +1,13 @@
+id;assembly;label;geN_original_file;geN_formatted_file;VIB_original_file;VIB_formatted_file;VS2_original_file;VS2_formatted_file;checkv_vib_total;checkv_vib_medium;checkv_vib_high;checkv_vs2_total;checkv_vs2_medium;checkv_vs2_high;checkv_gen_total;checkv_gen_medium;checkv_gen_high
+S1;case/patient_01/final.contigs.fa;1;S1_virus.fna;S1_geN.fna;S1.phages_combined.fna;S1_VIB.fna;final-viral-combined.fa;S1_VS2.fna;23;9;6;25;11;8;24;13;9
+S2;case/patient_02/final.contigs.fa;1;S2_virus.fna;S2_geN.fna;S2.phages_combined.fna;S2_VIB.fna;final-viral-combined.fa;S2_VS2.fna;22;7;3;20;5;3;20;5;2
+S3;case/patient_03/final.contigs.fa;1;S3_virus.fna;S3_geN.fna;S3.phages_combined.fna;S3_VIB.fna;final-viral-combined.fa;S3_VS2.fna;22;8;5;19;7;4;24;13;6
+S4;case/patient_04/final.contigs.fa;1;S4_virus.fna;S4_geN.fna;S4.phages_combined.fna;S4_VIB.fna;final-viral-combined.fa;S4_VS2.fna;20;8;4;22;8;5;20;7;3
+S5;case/patient_05/final.contigs.fa;1;S5_virus.fna;S5_geN.fna;S5.phages_combined.fna;S5_VIB.fna;final-viral-combined.fa;S5_VS2.fna;24;10;6;24;11;5;24;11;5
+S6;case/patient_06/final.contigs.fa;1;S6_virus.fna;S6_geN.fna;S6.phages_combined.fna;S6_VIB.fna;final-viral-combined.fa;S6_VS2.fna;22;7;4;24;8;4;21;6;3
+S7;control/patient_07/final.contigs.fa;0;S7_virus.fna;S7_geN.fna;S7.phages_combined.fna;S7_VIB.fna;final-viral-combined.fa;S7_VS2.fna;23;8;4;24;10;4;22;8;3
+S8;control/patient_08/final.contigs.fa;0;S8_virus.fna;S8_geN.fna;S8.phages_combined.fna;S8_VIB.fna;final-viral-combined.fa;S8_VS2.fna;23;9;5;27;12;9;23;9;6
+S9;control/patient_09/final.contigs.fa;0;S9_virus.fna;S9_geN.fna;S9.phages_combined.fna;S9_VIB.fna;final-viral-combined.fa;S9_VS2.fna;27;11;4;27;13;5;25;10;4
+S10;control/patient_10/final.contigs.fa;0;S10_virus.fna;S10_geN.fna;S10.phages_combined.fna;S10_VIB.fna;final-viral-combined.fa;S10_VS2.fna;22;8;3;24;12;3;21;8;2
+S11;control/patient_11/final.contigs.fa;0;S11_virus.fna;S11_geN.fna;S11.phages_combined.fna;S11_VIB.fna;final-viral-combined.fa;S11_VS2.fna;24;8;3;22;8;3;22;8;2
+S12;control/patient_12/final.contigs.fa;0;S12_virus.fna;S12_geN.fna;S12.phages_combined.fna;S12_VIB.fna;final-viral-combined.fa;S12_VS2.fna;20;9;6;21;9;5;25;10;5

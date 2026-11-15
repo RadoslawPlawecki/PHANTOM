@@ -1,0 +1,35 @@
+{
+    "roc_auc": {
+        "score": 1.0
+    },
+    "bacc": {
+        "score": 1.0
+    },
+    "f1": {
+        "score": 1.0
+    },
+    "precision": {
+        "score": 1.0
+    },
+    "recall": {
+        "score": 1.0
+    },
+    "pr_auc": {
+        "score": 1.0
+    },
+    "mcc": {
+        "score": 1.0
+    },
+    "gmean": {
+        "score": 1.0
+    },
+    "specificity": {
+        "score": 1.0
+    },
+    "sensitivity": {
+        "score": 1.0
+    },
+    "npv": {
+        "score": 1.0
+    }
+}
