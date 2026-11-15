@@ -75,7 +75,7 @@ jobs:
         run: pytest tests -m unit --cov=phantom --cov-report= --cov-fail-under=0
         env:
           COVERAGE_FILE: .coverage.unit
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-unit
           path: .coverage.unit
@@ -99,7 +99,7 @@ jobs:
         run: pytest tests -m regression --cov=phantom --cov-report= --cov-fail-under=0
         env:
           COVERAGE_FILE: .coverage.regression
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-regression
           path: .coverage.regression
@@ -123,7 +123,7 @@ jobs:
         run: pytest tests -m e2e --cov=phantom --cov-report= --cov-fail-under=0
         env:
           COVERAGE_FILE: .coverage.e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-e2e
           path: .coverage.e2e
