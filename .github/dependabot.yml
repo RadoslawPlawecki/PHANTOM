@@ -1,3 +1,5 @@
+# Dependabot: weekly pull requests that keep the Python dependencies and the
+# GitHub Actions used by CI up to date.
 version: 2
 updates:
   - package-ecosystem: pip

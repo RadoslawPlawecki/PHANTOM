@@ -1,3 +1,6 @@
+# Continuous integration: on every push and pull request, GitHub runs the lint and
+# type checks, then the tests in order -- 1. unit, 2. regression, 3. end-to-end --
+# each a job of its own, and finally the 90 % coverage gate over all three.
 name: CI
 
 on:
@@ -55,7 +58,8 @@ jobs:
       - name: mypy
         run: mypy src/phantom
 
-  test:
+  unit-tests:
+    name: "1. unit tests"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,5 +70,82 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install dev dependencies
         run: pip install -e ".[dev]"
-      - name: pytest
-        run: pytest tests/ -m "not slow"
+      # Every module and pipeline step on small data (about a minute).
+      - name: pytest -m unit
+        run: pytest tests -m unit --cov=phantom --cov-report= --cov-fail-under=0
+        env:
+          COVERAGE_FILE: .coverage.unit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: .coverage.unit
+          include-hidden-files: true
+
+  regression-tests:
+    name: "2. regression tests"
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+      # The example pipeline's results vs. the reviewed reference results (tests/regression/golden/).
+      - name: pytest -m regression
+        run: pytest tests -m regression --cov=phantom --cov-report= --cov-fail-under=0
+        env:
+          COVERAGE_FILE: .coverage.regression
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-regression
+          path: .coverage.regression
+          include-hidden-files: true
+
+  e2e-tests:
+    name: "3. end-to-end tests"
+    needs: regression-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+      # The example pipeline through the command line, as a user runs it.
+      - name: pytest -m e2e
+        run: pytest tests -m e2e --cov=phantom --cov-report= --cov-fail-under=0
+        env:
+          COVERAGE_FILE: .coverage.e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-e2e
+          path: .coverage.e2e
+          include-hidden-files: true
+
+  coverage:
+    name: "coverage of all tests (>= 90 %)"
+    needs: [unit-tests, regression-tests, e2e-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install coverage
+        run: pip install "coverage[toml]"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+      # The three kinds together; the 90 % threshold is fail_under in pyproject.toml.
+      - name: Combine and check
+        run: |
+          coverage combine .coverage.unit .coverage.regression .coverage.e2e
+          coverage report

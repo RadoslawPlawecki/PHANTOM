@@ -1,3 +1,5 @@
+# The checks run before every `git push` (pre-commit install --hook-type pre-push):
+# the same lint, format, type and spelling checks as CI.
 default_install_hook_types: [pre-push]
 
 repos:
@@ -42,9 +44,14 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
+      # pre-commit shows a hook's output only once it ends; to watch the tests
+      # pass one by one, pytest writes straight to the terminal when there is one.
       - id: pytest
-        name: pytest (excluding slow)
-        entry: pytest tests/ -m "not slow" -v
+        name: pytest (all tests)
+        entry: >-
+          bash -c 'if { : > /dev/tty; } 2> /dev/null;
+          then exec pytest tests -v > /dev/tty 2>&1;
+          else exec pytest tests -v; fi'
         language: system
         pass_filenames: false
         stages: [pre-push]
