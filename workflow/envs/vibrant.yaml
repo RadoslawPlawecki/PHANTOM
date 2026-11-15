@@ -1,7 +1,8 @@
 # Created by Snakemake (--use-conda) when [envs].vibrant is not set in config.toml.
 # Pinned to the version the published results were produced with.
-channels:
+channels:  # never Anaconda's defaults channel (repo.anaconda.com: commercial terms)
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - vibrant=1.2.1

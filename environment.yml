@@ -5,13 +5,15 @@
 #   mamba env create -f environment.yml
 #   conda activate phantom
 name: phantom
-channels:
+channels:  # never Anaconda's defaults channel (repo.anaconda.com: commercial terms)
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - python=3.13
   - pip
   - snakemake-minimal=9.27
   - poppler  # pdftoppm, used by the regression harness to compare plots
   - pip:
+      - -r requirements-lock.txt  # the exact versions the published results were checked with
       - -e .

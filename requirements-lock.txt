@@ -1,0 +1,39 @@
+# Exact versions of PHANTOM's Python dependencies: the environment the tests and
+# the regression checks on the published data passed with (Python 3.13, Linux).
+#   pip install -r requirements-lock.txt && pip install --no-deps -e .
+Mako==1.3.12
+MarkupSafe==3.0.3
+PyYAML==6.0.3
+SQLAlchemy==2.0.51
+alembic==1.18.4
+catboost==1.2.10
+colorlog==6.10.1
+contourpy==1.3.3
+cycler==0.12.1
+fonttools==4.62.1
+graphviz==0.21
+greenlet==3.5.2
+imbalanced-learn==0.14.2
+joblib==1.5.3
+kiwisolver==1.5.0
+matplotlib==3.11.2
+narwhals==2.21.0
+numpy==2.5.3
+nvidia-nccl-cu13==2.29.7
+optuna==5.0.0
+packaging==25.0
+pandas==3.0.6
+pillow==12.2.0
+plotly==6.7.0
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+scikit-learn==1.9.1
+scipy==1.18.1
+seaborn==0.13.2
+six==1.17.0
+sklearn-compat==0.1.6
+threadpoolctl==3.6.0
+tomlkit==0.15.1
+tqdm==4.70.1
+typing_extensions==4.15.0
+xgboost==3.4.1

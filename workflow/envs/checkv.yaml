@@ -1,7 +1,9 @@
 # Created by Snakemake (--use-conda) when [envs].checkv is not set in config.toml.
-# Pinned to the version the published results were produced with.
-channels:
+# Pinned to the newest release (1.1.1, with database v1.5). Older data in this
+# project was made with CheckV 0.7.0, which assigns other quality tiers.
+channels:  # never Anaconda's defaults channel (repo.anaconda.com: commercial terms)
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
-  - checkv=0.7.0
+  - checkv=1.1.1
