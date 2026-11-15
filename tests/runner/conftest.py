@@ -13,7 +13,7 @@ from typing import Literal
 
 import pytest
 
-from phantom.runner.params import param
+from phantom.runner.parameters import param
 from phantom.runner.stage import REGISTRY, RunContext, Stage
 
 
@@ -36,22 +36,22 @@ class Echo(Stage):
         self.calls: list[EchoParams] = []
         self.fail_on: str | None = None
 
-    def inputs(self, p, ctx):
-        return [ctx.resolve(p.src) if p.src else self.root / "in.txt"]
+    def inputs(self, params, context):
+        return [context.resolve(params.src) if params.src else self.root / "in.txt"]
 
-    def writes(self, p, ctx):
+    def writes(self, params, context):
         return [self.root / "out"]
 
-    def run(self, p, ctx):
-        if p.name == self.fail_on:
+    def run(self, params, context):
+        if params.name == self.fail_on:
             raise RuntimeError("boom")
-        out = self.root / "out" / f"{p.name}_{p.n}"
-        out.mkdir(parents=True, exist_ok=True)
-        self.calls.append(p)
-        return [out]
+        output = self.root / "out" / f"{params.name}_{params.n}"
+        output.mkdir(parents=True, exist_ok=True)
+        self.calls.append(params)
+        return [output]
 
-    def label(self, p):
-        return f"{p.name}/{p.n}"
+    def label(self, params):
+        return f"{params.name}/{params.n}"
 
 
 @dataclass(frozen=True)
@@ -68,26 +68,26 @@ class Consume(Stage):
         self.root = root
         self.calls: list[ConsumeParams] = []
 
-    def inputs(self, p, ctx):
+    def inputs(self, params, context):
         return [self.root / "out"]
 
-    def check_inputs(self, p, ctx):
+    def check_inputs(self, params, context):
         # Needs at least one echo output to consume.
-        out = self.root / "out"
-        return [] if any(out.iterdir()) else [f"nothing to consume in {out}"]
+        output = self.root / "out"
+        return [] if any(output.iterdir()) else [f"nothing to consume in {output}"]
 
-    def writes(self, p, ctx):
+    def writes(self, params, context):
         return [self.root / "final"]
 
-    def run(self, p, ctx):
-        out = self.root / "final" / p.tag
-        out.mkdir(parents=True, exist_ok=True)
-        self.calls.append(p)
-        return [out]
+    def run(self, params, context):
+        output = self.root / "final" / params.tag
+        output.mkdir(parents=True, exist_ok=True)
+        self.calls.append(params)
+        return [output]
 
 
 @pytest.fixture
-def ctx(tmp_workspace) -> RunContext:
+def context(tmp_workspace) -> RunContext:
     return RunContext.load(tmp_workspace.config_path)
 
 

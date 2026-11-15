@@ -1,6 +1,6 @@
 """
 Labeling strategies of ``preprocessing.metadata`` -- alternatives to the
-labels of the sample sheet: a threshold on the sample number, a manual list
+labels of the raw folder's class folders: a threshold on the sample number, a manual list
 of cases, a regex on the sample id, or an external id,label CSV.
 """
 
@@ -45,8 +45,8 @@ class SampleThresholdLabeler(LabelingStrategy):
         labels = {}
         for _, row in df.iterrows():
             match = re.search(r"\d+", str(row["id"]))
-            sample_num = int(match.group()) if match else float("inf")
-            labels[row["id"]] = 1 if sample_num <= self.threshold else 0
+            sample_number = int(match.group()) if match else float("inf")
+            labels[row["id"]] = 1 if sample_number <= self.threshold else 0
         return labels
 
 

@@ -18,9 +18,9 @@ VIBRANT_RE = re.compile(r"Runtime:\s*([0-9.]+)\s*minutes")
 
 def get_sample_id(path):
     name = Path(path).name
-    m = re.search(r"S\d+", name)
-    if m:
-        return m.group(0)
+    match = re.search(r"S\d+", name)
+    if match:
+        return match.group(0)
     raise ValueError(f"Cannot extract sample_id from {name}")
 
 
@@ -32,9 +32,9 @@ def get_file_size(path):
 def extract_first_time(file_path):
     with open(file_path) as f:
         for line in f:
-            m = TIME_RE.search(line)
-            if m:
-                return m.group(1)
+            match = TIME_RE.search(line)
+            if match:
+                return match.group(1)
     return None
 
 
@@ -42,9 +42,9 @@ def extract_last_time(file_path):
     last = None
     with open(file_path) as f:
         for line in f:
-            m = TIME_RE.search(line)
-            if m:
-                last = m.group(1)
+            match = TIME_RE.search(line)
+            if match:
+                last = match.group(1)
     return last
 
 
@@ -56,29 +56,45 @@ def get_virsorter2_log_time(log_file):
     return datetime.strptime(start_str, "%Y-%m-%d %H:%M")
 
 
-def summarize_checkv(path, medium_comp=50, high_comp=75, max_cont=10):
-    total = medium = high = 0
+def count_checkv_scored(path) -> int | None:
+    """Contigs of a CheckV quality summary with a completeness and a
+    contamination estimate (None: not a quality summary)."""
+    total = 0
     with open(path) as f:
         reader = csv.DictReader(f, delimiter="\t")
-        fields = {k.lower(): k for k in reader.fieldnames}
+        fields = {k.lower(): k for k in reader.fieldnames or []}
         comp_key = fields.get("completeness") or fields.get("estimated_completeness")
         cont_key = fields.get("contamination") or fields.get("estimated_contamination")
         if not comp_key or not cont_key:
-            return None, None, None
+            return None
         for row in reader:
             try:
-                comp = float(row[comp_key])
-                cont = float(row[cont_key])
+                float(row[comp_key])
+                float(row[cont_key])
             except (ValueError, TypeError):
                 continue
             total += 1
-            if cont >= max_cont:
-                continue
-            if comp >= medium_comp:
-                medium += 1
-            if comp >= high_comp:
-                high += 1
-    return total, medium, high
+    return total
+
+
+MASK_COUNTS = {"medium": "MQ_provMAGs.tsv", "high": "HQ_provMAGs.tsv"}
+
+
+def count_masked(masks_dir: Path, tool: str) -> dict[str, dict[str, int]]:
+    """
+    Medium/high-quality contigs per sample, counted from the masks
+    ``preprocessing.masks`` wrote -- so the counts always use the thresholds
+    the masks were made with. A missing mask file is an error.
+    """
+    counts = {}
+    for quality, filename in MASK_COUNTS.items():
+        path = masks_dir / tool / filename
+        if not path.is_file():
+            raise FileNotFoundError(f"{path} not found -- run preprocessing.masks first")
+        ids = pd.read_csv(path, sep="\t", usecols=["contig_id"])["contig_id"]
+        samples = ids.str.split("|", n=1).str[1].str.split("_").str[0]
+        counts[quality] = samples.value_counts().to_dict()
+    return counts
 
 
 def build_index(root):
@@ -120,9 +136,9 @@ def build_checkv_index(root):
 def runtime_vibrant(file_path: Path):
     with open(file_path) as f:
         for line in f:
-            m = VIBRANT_RE.search(line)
-            if m:
-                return round(float(m.group(1)))
+            match = VIBRANT_RE.search(line)
+            if match:
+                return round(float(match.group(1)))
     return None
 
 
@@ -156,7 +172,7 @@ def runtime_genomad(folder):
     return round((end - start).total_seconds() / 60)
 
 
-def scan_metadata(config: dict) -> pd.DataFrame:
+def scan_metadata(config: dict, checkv: bool = True) -> pd.DataFrame:
     """
     Scans predefined roots for metadata and formats it as a DataFrame
     joined on id.
@@ -183,30 +199,40 @@ def scan_metadata(config: dict) -> pd.DataFrame:
     checkv_gen = build_checkv_index(checkv_base / "genomad")
 
     sample_ids = set(vib_root) | set(vs2_root) | set(gen_root) | set(assembly_root)
-    results = {sid: {"id": sid} for sid in sample_ids}
+    results = {sample_id: {"id": sample_id} for sample_id in sample_ids}
 
-    for sid, folder in vib_root.items():
+    for sample_id, folder in vib_root.items():
         logs = list(folder.rglob("VIBRANT_log_run_*.log"))
         if logs:
-            results[sid]["vib_runtime"] = runtime_vibrant(
+            results[sample_id]["vib_runtime"] = runtime_vibrant(
                 max(logs, key=lambda f: f.stat().st_mtime)
             )
-    for sid, folder in vs2_root.items():
-        results[sid]["vs2_runtime"] = runtime_virsorter2(folder)
-    for sid, folder in gen_root.items():
-        results[sid]["gen_runtime"] = runtime_genomad(folder)
+    for sample_id, folder in vs2_root.items():
+        results[sample_id]["vs2_runtime"] = runtime_virsorter2(folder)
+    for sample_id, folder in gen_root.items():
+        results[sample_id]["gen_runtime"] = runtime_genomad(folder)
 
-    for sid, file in assembly_root.items():
+    for sample_id, file in assembly_root.items():
         b, mb = get_file_size(file)
-        results[sid]["megahit_size_bytes"] = b
-        results[sid]["megahit_size_mb"] = mb
+        results[sample_id]["raw_size_bytes"] = b
+        results[sample_id]["raw_size_mb"] = mb
 
-    for tag, index in (("vib", checkv_vib), ("vs2", checkv_vs2), ("gen", checkv_gen)):
-        for sid, path in index.items():
-            t, m, h = summarize_checkv(path)
-            if t is not None:
-                results[sid][f"checkv_{tag}_total"] = t
-                results[sid][f"checkv_{tag}_medium"] = m
-                results[sid][f"checkv_{tag}_high"] = h
+    if not checkv:
+        return pd.DataFrame(list(results.values()))
+    masks_dir = path(config, "masks")
+    for tag, tool, index in (
+        ("vib", "vibrant", checkv_vib),
+        ("vs2", "virsorter2", checkv_vs2),
+        ("gen", "genomad", checkv_gen),
+    ):
+        if not index:
+            continue
+        masked = count_masked(masks_dir, tool)
+        for sample_id, summary in index.items():
+            total = count_checkv_scored(summary)
+            if total is not None:
+                results[sample_id][f"checkv_{tag}_total"] = total
+                results[sample_id][f"checkv_{tag}_medium"] = masked["medium"].get(sample_id, 0)
+                results[sample_id][f"checkv_{tag}_high"] = masked["high"].get(sample_id, 0)
 
     return pd.DataFrame(list(results.values()))

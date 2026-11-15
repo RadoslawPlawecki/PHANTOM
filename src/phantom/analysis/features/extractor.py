@@ -29,7 +29,7 @@ class FeatureExtractor:
     def __init__(
         self,
         version: str,
-        config_mgr: FeatureConfigManager,
+        feature_version_manager: FeatureConfigManager,
         feature_col: dict[str, str] | None = None,
         binary: bool | dict[str, bool] | None = None,
         min_patients: int | dict[str, int] | None = None,
@@ -46,8 +46,8 @@ class FeatureExtractor:
         self.binary = binary
         self.min_patients = min_patients
         self.tools = list(PIPELINES) if tools is None else tools
-        self.preprocessed_dir = config_mgr.get_stage_dir(version, "preprocessed")
-        self.extracted_dir = config_mgr.get_stage_dir(version, "extracted")
+        self.preprocessed_dir = feature_version_manager.get_stage_dir(version, "preprocessed")
+        self.extracted_dir = feature_version_manager.get_stage_dir(version, "extracted")
 
     def run(self) -> list[Path]:
         """Extracts every preprocessed file of the selected tools; returns
@@ -76,6 +76,6 @@ class FeatureExtractor:
         out_dir = self.extracted_dir / tool
         out_dir.mkdir(parents=True, exist_ok=True)
         stem = preprocessed_file.stem.removesuffix("_M_PP")
-        out_path = out_dir / f"{stem}_FEAT.csv"
-        feature_matrix.to_csv(out_path, sep=";", index=False)
-        print(f"       Saved to: {out_path} (Shape: {feature_matrix.shape})")
+        output_path = out_dir / f"{stem}_FEAT.csv"
+        feature_matrix.to_csv(output_path, sep=";", index=False)
+        print(f"       Saved to: {output_path} (Shape: {feature_matrix.shape})")

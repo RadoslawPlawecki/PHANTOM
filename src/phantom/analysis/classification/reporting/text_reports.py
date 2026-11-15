@@ -61,11 +61,11 @@ class ReportFormatter:
         )
 
     @staticmethod
-    def format_confusion_matrix(cm: dict) -> str:
+    def format_confusion_matrix(confusion: dict) -> str:
         return (
             "\nConfusion Matrix:\n"
-            f"TP: {cm['TP']:02d} | FP: {cm['FP']:02d}\n"
-            f"FN: {cm['FN']:02d} | TN: {cm['TN']:02d}\n"
+            f"TP: {confusion['TP']:02d} | FP: {confusion['FP']:02d}\n"
+            f"FN: {confusion['FN']:02d} | TN: {confusion['TN']:02d}\n"
         )
 
     @staticmethod
@@ -77,8 +77,14 @@ class ReportFormatter:
             f"{'No.':>3} {'Feature':<33} | {'Importance':>10} | {'Mean Class 0':>12} | {'Mean Class 1':>12}",
             "-" * 100,
         ]
-        idx = importances.argsort()[-k:][::-1]
-        for i, j in enumerate(idx, 1):
+        importances = np.asarray(importances, dtype=float)
+        if np.isnan(importances).all():
+            return (
+                "\nTop Features: not available -- the model has no built-in feature "
+                "importances (the rcv validator reports permutation importances).\n"
+            )
+        indices = np.nan_to_num(importances, nan=-np.inf).argsort()[-k:][::-1]
+        for i, j in enumerate(indices, 1):
             feat_values = X[:, j]
             mean_0 = np.mean(feat_values[y == 0])
             mean_1 = np.mean(feat_values[y == 1])
@@ -95,30 +101,32 @@ class ReportFormatter:
     def format_misclassified_samples(
         y_true: np.ndarray,
         y_pred: np.ndarray,
-        test_idx: np.ndarray,
+        test_indices: np.ndarray,
         sample_ids: pd.Series,
         top_k: int = 10,
     ) -> str:
-        fp_indices = test_idx[(y_true == 0) & (y_pred == 1)]
-        fn_indices = test_idx[(y_true == 1) & (y_pred == 0)]
-        fp_counts = Counter(fp_indices)
-        fn_counts = Counter(fn_indices)
+        false_positive_indices = test_indices[(y_true == 0) & (y_pred == 1)]
+        false_negative_indices = test_indices[(y_true == 1) & (y_pred == 0)]
+        false_positive_counts = Counter(false_positive_indices)
+        false_negative_counts = Counter(false_negative_indices)
 
         def format_block(title: str, counts: Counter) -> str:
             if not counts:
                 return f"{title}: None"
             parts = []
-            for idx, count in counts.most_common():
-                label = str(sample_ids.iloc[idx])
+            for indices, count in counts.most_common():
+                label = str(sample_ids.iloc[indices])
                 if count > 1:
                     parts.append(f"{label} [{count}]")
                 else:
                     parts.append(label)
             return f"{title}: " + ", ".join(parts)
 
-        fp_line = format_block("False Positives", fp_counts)
-        fn_line = format_block("False Negatives", fn_counts)
-        return "\nMisclassified Samples:\n" + fp_line + "\n" + fn_line + "\n"
+        false_positive_line = format_block("False Positives", false_positive_counts)
+        false_negative_line = format_block("False Negatives", false_negative_counts)
+        return (
+            "\nMisclassified Samples:\n" + false_positive_line + "\n" + false_negative_line + "\n"
+        )
 
     @staticmethod
     def format_unsupervised_metrics(results):

@@ -66,6 +66,6 @@ def apply_mask(df: pd.DataFrame, mask_path: Path | None) -> pd.DataFrame:
 
 def load_file(path: Path, accession: str = "Accession") -> pd.DataFrame:
     df = pd.read_csv(path, delimiter=";", on_bad_lines="warn")
-    vt = path.stem.split("_")[0]
-    df["Accession"] = format_accession(vt, df[accession])
+    virus_identification_tool = path.stem.split("_")[0]
+    df["Accession"] = format_accession(virus_identification_tool, df[accession])
     return df

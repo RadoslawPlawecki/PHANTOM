@@ -15,9 +15,9 @@ Safety: real inputs are symlinked into the sandbox read-only *by convention*,
 so every linked tree is fingerprinted (path, size, mtime) before and after a
 run and the harness aborts if anything under it changed.
 
-Determinism: ``SOURCE_DATE_EPOCH`` pins PDF timestamps, every Optuna study
-gets a seeded TPE sampler (the pipeline itself creates unseeded ones), and
-the optimization trial budgets are reduced -- identically on both paths.
+Determinism: ``SOURCE_DATE_EPOCH`` pins PDF timestamps; every random
+component is seeded by the pipeline itself (the stages' ``seed``); the
+optimization trial budgets are reduced to keep the cases fast.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ class Case:
     keep_limit_mb: int = 50
 
 
-# --- sandbox -----------------------------------------------------------------
+# sandbox
 
 
 def build_sandbox(case: Case) -> None:
@@ -144,7 +144,7 @@ def guard_real_inputs(case: Case) -> Iterator[None]:
         raise SystemExit(f"[ABORT] real input data changed during the run: {changed}")
 
 
-# --- determinism patches -----------------------------------------------------
+# determinism patches
 
 
 class Patcher:
@@ -153,44 +153,27 @@ class Patcher:
     def __init__(self) -> None:
         self._undo: list[tuple[Any, str, Any]] = []
 
-    def set(self, obj: Any, name: str, value: Any) -> None:
-        self._undo.append((obj, name, obj.__dict__.get(name, getattr(obj, name, None))))
-        setattr(obj, name, value)
+    def set(self, target: Any, name: str, value: Any) -> None:
+        self._undo.append((target, name, target.__dict__.get(name, getattr(target, name, None))))
+        setattr(target, name, value)
 
     def close(self) -> None:
-        for obj, name, old in reversed(self._undo):
-            setattr(obj, name, old)
+        for value, name, old in reversed(self._undo):
+            setattr(value, name, old)
         self._undo.clear()
 
 
 @contextlib.contextmanager
 def deterministic(p: Patcher) -> Iterator[None]:
-    import optuna
-
     from phantom.analysis.features.optimization import search
 
-    real_create = optuna.create_study
-
-    def seeded_create_study(*args, **kwargs):
-        if kwargs.get("sampler") is None:
-            kwargs["sampler"] = optuna.samplers.TPESampler(seed=0)
-        return real_create(*args, **kwargs)
-
-    p.set(optuna, "create_study", seeded_create_study)
-
-    # The MDS evaluation's PERMANOVA is called without a seed, so its p-value
-    # varies from run to run.
-    from phantom.analysis.classification.ml import evaluator
-
-    real_permanova = evaluator.permanova
-    p.set(evaluator, "permanova", lambda *a, **k: real_permanova(*a, **{"seed": 0, **k}))
     for name in ("CHERRY_DEFAULT_TRIALS", "PHAGCN_DEFAULT_TRIALS", "PHAVIP_DEFAULT_TRIALS"):
         p.set(search, name, REDUCED_TRIALS)
     p.set(search, "DEFAULT_TRIALS", dict.fromkeys(search.DEFAULT_TRIALS, REDUCED_TRIALS))
     yield
 
 
-# --- manifests ---------------------------------------------------------------
+# manifests
 
 
 def _iter_files(path: Path) -> Iterator[Path]:
@@ -220,14 +203,14 @@ def _pdf_render_sha256(path: Path) -> str:
     """
     import tempfile
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory() as temporary_file:
         subprocess.run(  # noqa: S603
-            ["pdftoppm", "-r", "100", "-png", str(path), f"{tmp}/p"],  # noqa: S607
+            ["pdftoppm", "-r", "100", "-png", str(path), f"{temporary_file}/p"],  # noqa: S607
             check=True,
             capture_output=True,
         )
         h = hashlib.sha256()
-        for page in sorted(Path(tmp).glob("p*.png")):
+        for page in sorted(Path(temporary_file).glob("p*.png")):
             h.update(page.read_bytes())
         return h.hexdigest()
 
@@ -238,8 +221,8 @@ TEXT_SUFFIXES = {".csv", ".tsv", ".json", ".toml"}
 
 def _normalized_sha256(path: Path) -> str:
     """
-    Text outputs hashed with every decimal number rounded to 10 significant
-    digits: the same computation summed in a different order (e.g. skbio's
+    Text outputs hashed with run-folder timestamps masked and every decimal
+    number rounded to 10 significant digits: the same computation summed in a different order (e.g. skbio's
     PERMANOVA statistic) differs in the 15th-16th digit, which is noise, not
     a changed result. Anything that differs at 1e-10 relative still fails.
     """
@@ -248,6 +231,8 @@ def _normalized_sha256(path: Path) -> str:
         return format(float(m.group()), ".10g").encode()
 
     content = _as_recorded(path.read_text(encoding="utf-8", errors="surrogateescape"))
+    # Run-folder timestamps (e.g. figures' metrics.csv names its source runs) are not results.
+    content = TIMESTAMP.sub("<ts>", content)
     data = content.encode("utf-8", errors="surrogateescape")
     return hashlib.sha256(FLOAT.sub(rounded, data)).hexdigest()
 
@@ -273,10 +258,13 @@ def _features_table_sha256(root: Path) -> str:
 
 
 def manifest(case: Case) -> dict[str, dict[str, Any]]:
-    out: dict[str, dict[str, Any]] = {}
+    output: dict[str, dict[str, Any]] = {}
     for rel_out in case.outputs:
         if rel_out == "config.toml":
-            out["config.toml[features]"] = {"sha256": _features_table_sha256(SANDBOX), "bytes": 0}
+            output["config.toml[features]"] = {
+                "sha256": _features_table_sha256(SANDBOX),
+                "bytes": 0,
+            }
             continue
         root = SANDBOX / rel_out
         if not root.exists():
@@ -285,19 +273,19 @@ def manifest(case: Case) -> dict[str, dict[str, Any]]:
             if f.name in SKIP_NAMES or f.suffix in SKIP_SUFFIXES or f.is_symlink():
                 continue
             key = _as_recorded(TIMESTAMP.sub("<ts>", str(f.relative_to(SANDBOX))))
-            if key in out:
+            if key in output:
                 raise SystemExit(f"[ABORT] two outputs normalize to the same name: {key}")
             if f.suffix == ".pdf":
-                out[key] = {
+                output[key] = {
                     "sha256": _pdf_render_sha256(f),
                     "bytes": f.stat().st_size,
                     "rendered": True,
                 }
             else:
-                out[key] = {"sha256": _sha256(f), "bytes": f.stat().st_size}
+                output[key] = {"sha256": _sha256(f), "bytes": f.stat().st_size}
                 if f.suffix in TEXT_SUFFIXES:
-                    out[key]["normalized_sha256"] = _normalized_sha256(f)
-    return out
+                    output[key]["normalized_sha256"] = _normalized_sha256(f)
+    return output
 
 
 def _keep_small_outputs(case: Case, dest: Path) -> None:
@@ -330,7 +318,7 @@ def git_commit() -> str:
         return "unknown"
 
 
-# --- running -----------------------------------------------------------------
+# running
 
 
 def run_new(case: Case) -> dict:
@@ -344,10 +332,10 @@ def run_new(case: Case) -> dict:
     p = Patcher()
     try:
         with guard_real_inputs(case), sandboxed(), deterministic(p):
-            ctx = RunContext.load(SANDBOX / "config.toml")
+            context = RunContext.load(SANDBOX / "config.toml")
             run = parse_run_doc({"run": {"name": f"regression-{case.name}"}, "steps": case.steps})
-            store = StampStore(ctx.section_path("stamps"))
-            execute(plan(build_jobs(run, ctx), ctx, store, force=True), ctx, store, run)
+            store = StampStore(context.section_path("stamps"))
+            execute(plan(build_jobs(run, context), context, store, force=True), context, store, run)
             return manifest(case)
     finally:
         p.close()

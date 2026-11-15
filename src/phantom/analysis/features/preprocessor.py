@@ -32,7 +32,7 @@ def mask_dir_for(merged_file: Path, config: dict) -> Path:
     if not masks:
         raise ValueError("config.toml is missing [masks].path")
     prefix = merged_file.stem.split("_")[0]
-    tool_name = config.get("tools", {}).get(prefix)
+    tool_name = ConfigLoader.virus_identification_tools(config).get(prefix)
     if tool_name is None:
         raise ValueError(f"unknown vtool prefix {prefix!r} of {merged_file.name} (see [tools])")
     return ConfigLoader.resolve_data_path(masks) / tool_name
@@ -43,7 +43,7 @@ class FeaturePreprocessor:
         self,
         version: str,
         config: dict,
-        config_mgr: FeatureConfigManager,
+        feature_version_manager: FeatureConfigManager,
         mask: str | None = None,
         tools: list[str] | None = None,
     ):
@@ -56,8 +56,8 @@ class FeaturePreprocessor:
         self.config = config
         self.mask = mask
         self.tools = list(PIPELINES) if tools is None else tools
-        self.raw_merged_dir = config_mgr.get_stage_dir(version, "raw_merged")
-        self.preprocessed_dir = config_mgr.get_stage_dir(version, "preprocessed")
+        self.raw_merged_dir = feature_version_manager.get_stage_dir(version, "raw_merged")
+        self.preprocessed_dir = feature_version_manager.get_stage_dir(version, "preprocessed")
 
     def run(self) -> list[Path]:
         """Preprocesses every merged file of the selected tools; returns the
@@ -81,6 +81,6 @@ class FeaturePreprocessor:
         preprocessed_df = pipeline.preprocess(df)
         out_dir = self.preprocessed_dir / tool
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{merged_file.stem}_PP.csv"
-        preprocessed_df.to_csv(out_path, sep=";", index=False)
-        print(f"       Saved to: {out_path} (Shape: {preprocessed_df.shape})")
+        output_path = out_dir / f"{merged_file.stem}_PP.csv"
+        preprocessed_df.to_csv(output_path, sep=";", index=False)
+        print(f"       Saved to: {output_path} (Shape: {preprocessed_df.shape})")

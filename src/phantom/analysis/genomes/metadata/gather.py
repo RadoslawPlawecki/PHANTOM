@@ -40,7 +40,7 @@ SCAN_COLUMNS = {
         "checkv_gen_medium",
         "checkv_gen_high",
     ],
-    "sizes": ["megahit_size_bytes", "megahit_size_mb"],
+    "sizes": ["raw_size_bytes", "raw_size_mb"],
 }
 TARGETS = ("labeling", *SCAN_COLUMNS)
 STRATEGIES = {
@@ -88,7 +88,7 @@ def build_labeler(spec: dict[str, Any], resolve) -> LabelingStrategy:
 
 def gather_metadata(
     config: dict,
-    meta: MetadataTable,
+    metadata: MetadataTable,
     targets: list[str],
     labeler: LabelingStrategy | None = None,
     overwrite_labels: bool = False,
@@ -97,9 +97,9 @@ def gather_metadata(
     columns written."""
     from phantom.analysis.genomes.metadata.scanner import scan_metadata
 
-    current = meta.load()
+    current = metadata.load()
     if current.empty:
-        raise ValueError(f"no samples in {meta.path}; run preprocessing.collect first")
+        raise ValueError(f"no samples in {metadata.path}; run preprocessing.collect first")
     parts: list[tuple[pd.DataFrame, set[str]]] = []
 
     if "labeling" in targets:
@@ -107,7 +107,7 @@ def gather_metadata(
             raise ValueError("targets include 'labeling' but no labeling strategy was given")
         if LABEL_COLUMN in current.columns and not overwrite_labels:
             raise ValueError(
-                f"{meta.path} already has labels; set overwrite_labels = true to replace them"
+                f"{metadata.path} already has labels; set overwrite_labels = true to replace them"
             )
         labels = labeler.assign_labels(current)
         df_labels = pd.DataFrame(list(labels.items()), columns=["id", LABEL_COLUMN])
@@ -118,7 +118,7 @@ def gather_metadata(
     scan_targets = [t for t in SCAN_COLUMNS if t in targets]
     if scan_targets:
         print("[INFO] Scanning logs, sizes and CheckV results...")
-        df_scan = scan_metadata(config)
+        df_scan = scan_metadata(config, checkv="checkv" in scan_targets)
         if not df_scan.empty:
             for target in scan_targets:
                 cols = [c for c in SCAN_COLUMNS[target] if c in df_scan.columns]
@@ -129,12 +129,12 @@ def gather_metadata(
 
     written = []
     for df_part, columns in parts:
-        meta.add_metadata_columns(df_part, overwrite=columns)
+        metadata.add_metadata_columns(df_part, overwrite=columns)
         written += sorted(columns)
     return written
 
 
-def collect_genomes(config: dict, meta: MetadataTable) -> pd.DataFrame:
+def collect_genomes(config: dict, metadata: MetadataTable) -> pd.DataFrame:
     """
     Copies the identification tools' viral contigs into the genome registry
     and records the original/formatted file names (the "renaming" columns)
@@ -142,7 +142,7 @@ def collect_genomes(config: dict, meta: MetadataTable) -> pd.DataFrame:
     """
     from phantom.analysis.genomes.collection import GenomeCollector
 
-    collector = GenomeCollector(config, meta)
+    collector = GenomeCollector(config, metadata)
     invalid = collector.scan_for_invalid()
     if invalid:
         print(
@@ -152,5 +152,5 @@ def collect_genomes(config: dict, meta: MetadataTable) -> pd.DataFrame:
     df = collector.collect()
     if df.empty:
         raise ValueError("no genomes were found or copied")
-    meta.add_metadata_columns(df, overwrite=set(df.columns) - {"id"})
+    metadata.add_metadata_columns(df, overwrite=set(df.columns) - {"id"})
     return df

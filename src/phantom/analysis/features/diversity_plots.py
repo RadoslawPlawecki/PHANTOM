@@ -1,5 +1,5 @@
 """
-Grouped bar-chart plots comparing healthy vs. allergic patients on
+Grouped bar-chart plots comparing controls (label 0) with cases (label 1) on
 taxonomic/host diversity metrics, one subplot per virus identification tool.
 """
 
@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from phantom.config.classes import class_names
 from phantom.config.plotting import use_latex
 
 GROUP_COLORS = {0: "#a1d99b", 1: "#238b45"}
-GROUP_LABELS = {0: "Healthy", 1: "Allergy"}
 VTOOL_DISPLAY_NAMES = {"geN": "geNomad", "VIB": "VIBRANT", "VS2": "VirSorter2"}
 
 
@@ -20,6 +20,7 @@ class DiversityVisualizer:
     @staticmethod
     def _draw_group_bars(ax, stats: pd.DataFrame, value_col: str) -> None:
         labels = [0, 1]
+        names = class_names()
         means = [
             stats.loc[label, (value_col, "mean")] if label in stats.index else 0 for label in labels
         ]
@@ -35,7 +36,7 @@ class DiversityVisualizer:
                 nan=0.0,
             )
         ax.bar(
-            [GROUP_LABELS[label] for label in labels],
+            [names[label] for label in labels],
             means,
             yerr=stds,
             capsize=6,
@@ -48,8 +49,8 @@ class DiversityVisualizer:
         ax.set_axisbelow(True)
 
     @staticmethod
-    def plot_group_bar_by_vtool(
-        group_stats_by_vtool: dict[str, pd.DataFrame],
+    def plot_group_bar_by_virus_identification_tool(
+        group_stats_by_virus_identification_tool: dict[str, pd.DataFrame],
         value_col: str,
         title: str,
         ylabel: str,
@@ -63,14 +64,25 @@ class DiversityVisualizer:
         no whisker when ``(value_col, "std")`` is absent.
         """
         use_latex()
-        vtools = list(group_stats_by_vtool)
+        virus_identification_tools = list(group_stats_by_virus_identification_tool)
         _, axes = plt.subplots(
-            1, len(vtools), figsize=(5 * len(vtools), 5), sharey=True, squeeze=False
+            1,
+            len(virus_identification_tools),
+            figsize=(5 * len(virus_identification_tools), 5),
+            sharey=True,
+            squeeze=False,
         )
         axes = axes[0]
-        for ax, vtool in zip(axes, vtools, strict=True):
-            DiversityVisualizer._draw_group_bars(ax, group_stats_by_vtool[vtool], value_col)
-            ax.set_title(VTOOL_DISPLAY_NAMES.get(vtool, vtool), fontsize=13, weight="bold", pad=10)
+        for ax, virus_identification_tool in zip(axes, virus_identification_tools, strict=True):
+            DiversityVisualizer._draw_group_bars(
+                ax, group_stats_by_virus_identification_tool[virus_identification_tool], value_col
+            )
+            ax.set_title(
+                VTOOL_DISPLAY_NAMES.get(virus_identification_tool, virus_identification_tool),
+                fontsize=13,
+                weight="bold",
+                pad=10,
+            )
         axes[0].set_ylabel(ylabel, fontsize=12, labelpad=8)
         plt.suptitle(title, fontsize=15, weight="bold", y=0.98)
         plt.tight_layout()

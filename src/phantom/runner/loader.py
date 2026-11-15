@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from phantom.runner import params as P
+from phantom.runner import parameters
 from phantom.runner.stage import RunContext, Stage, get_stage
 
 TOP_LEVEL_KEYS = {"run", "steps", "provenance"}
@@ -43,12 +43,12 @@ class Step:
 @dataclass
 class RunFile:
     path: Path | None
-    meta: dict[str, Any]
+    metadata: dict[str, Any]
     steps: list[Step]
 
     @property
     def name(self) -> str:
-        return str(self.meta.get("name") or (self.path.stem if self.path else "run"))
+        return str(self.metadata.get("name") or (self.path.stem if self.path else "run"))
 
 
 @dataclass
@@ -94,7 +94,7 @@ def parse_run_doc(doc: dict[str, Any], path: Path | None = None) -> RunFile:
         steps.append(Step(index=i, stage=stage, values=values))
     if errors:
         raise RunFileError(errors)
-    return RunFile(path=path, meta=dict(doc.get("run", {})), steps=steps)
+    return RunFile(path=path, metadata=dict(doc.get("run", {})), steps=steps)
 
 
 def parse_override(text: str) -> tuple[str | None, str, Any]:
@@ -127,7 +127,7 @@ def apply_overrides(run: RunFile, overrides: list[str]) -> RunFile:
                 stage = get_stage(step.stage)
             except KeyError:
                 continue
-            if key in {f.name for f in P.fields(stage.Params)}:
+            if key in {f.name for f in parameters.fields(stage.Params)}:
                 step.values[key] = value
                 hit = True
         if not hit:
@@ -138,8 +138,8 @@ def apply_overrides(run: RunFile, overrides: list[str]) -> RunFile:
     return run
 
 
-def build_jobs(run: RunFile, ctx: RunContext) -> list[Job]:
-    ctx.planned_versions.clear()
+def build_jobs(run: RunFile, context: RunContext) -> list[Job]:
+    context.planned_versions.clear()
     errors: list[str] = []
     jobs: list[Job] = []
     for step in run.steps:
@@ -149,27 +149,27 @@ def build_jobs(run: RunFile, ctx: RunContext) -> list[Job]:
         except KeyError as e:
             errors.append(f"step {step.index}: {e.args[0]}")
             continue
-        step_jobs, step_errors = _expand_step(step, stage, ctx)
+        step_jobs, step_errors = _expand_step(step, stage, context)
         for job in step_jobs:
             try:
-                step_errors += stage.validate(job.params, ctx)
+                step_errors += stage.validate(job.params, context)
             except (KeyError, ValueError, FileNotFoundError) as e:
                 # e.g. a config.toml section the stage needs is missing
                 step_errors.append(str(e.args[0]) if e.args else str(e))
         # A grid repeats the same mistake per job; each message already names
         # the offending value, so report it once.
-        errors += [f"{prefix}: {msg}" for msg in dict.fromkeys(step_errors)]
+        errors += [f"{prefix}: {message}" for message in dict.fromkeys(step_errors)]
         jobs += step_jobs
         for job in step_jobs:  # visible to the steps after this one
-            ctx.planned_versions.update(job.stage.announces(job.params))
+            context.planned_versions.update(job.stage.announces(job.params))
     if errors:
         raise RunFileError(errors)
     return jobs
 
 
-def _expand_step(step: Step, stage: Stage, ctx: RunContext) -> tuple[list[Job], list[str]]:
-    fields = {f.name: f for f in P.fields(stage.Params)}
-    hints = P.type_hints(stage.Params)
+def _expand_step(step: Step, stage: Stage, context: RunContext) -> tuple[list[Job], list[str]]:
+    fields = {f.name: f for f in parameters.fields(stage.Params)}
+    hints = parameters.type_hints(stage.Params)
     errors = []
 
     for key in step.values:
@@ -179,32 +179,36 @@ def _expand_step(step: Step, stage: Stage, ctx: RunContext) -> tuple[list[Job], 
                 f"unknown parameter {key!r}" + (f" -- did you mean {hint[0]!r}?" if hint else "")
             )
 
-    dynamic = stage.defaults(ctx)
+    dynamic = stage.defaults(context)
     values: dict[str, Any] = {}
     for name, f in fields.items():
         if name in step.values:
             values[name] = step.values[name]
         elif name in dynamic:
             values[name] = dynamic[name]
-        elif P.has_static_default(f):
-            values[name] = P.static_default(f)
+        elif parameters.has_static_default(f):
+            values[name] = parameters.static_default(f)
         else:
-            errors.append(f"missing required parameter {name!r} ({P.describe(hints[name])})")
+            errors.append(
+                f"missing required parameter {name!r} ({parameters.describe(hints[name])})"
+            )
 
     # Type-check every given value (each element, for a grid list) so all
     # mistakes in a step are reported together.
     grid_keys = []
     for name, value in values.items():
-        tp = hints[name]
-        if P.is_grid(fields[name]) and isinstance(value, list):
+        expected_type = hints[name]
+        if parameters.is_grid(fields[name]) and isinstance(value, list):
             grid_keys.append(name)
             if not value:
                 errors.append(f"{name}: empty list")
             errors += [
-                f"{name}: expected {P.describe(tp)}, got {v!r}" for v in value if not P.check(v, tp)
+                f"{name}: expected {parameters.describe(expected_type)}, got {v!r}"
+                for v in value
+                if not parameters.check(v, expected_type)
             ]
-        elif not P.check(value, tp):
-            errors.append(f"{name}: expected {P.describe(tp)}, got {value!r}")
+        elif not parameters.check(value, expected_type):
+            errors.append(f"{name}: expected {parameters.describe(expected_type)}, got {value!r}")
     if errors:
         return [], errors
 
@@ -213,7 +217,9 @@ def _expand_step(step: Step, stage: Stage, ctx: RunContext) -> tuple[list[Job], 
         Job(
             step=step,
             stage=stage,
-            params=stage.Params(**{**values, **dict(zip(grid_keys, combo, strict=True))}),
+            params=stage.resolve(
+                stage.Params(**{**values, **dict(zip(grid_keys, combo, strict=True))}), context
+            ),
         )
         for combo in combos
     ]

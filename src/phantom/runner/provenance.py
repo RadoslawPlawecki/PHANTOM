@@ -63,7 +63,7 @@ def _toml_safe(value: Any) -> Any:
 def render_run_toml(
     stage: str,
     params: Any,
-    run_meta: dict[str, Any],
+    run_metadata: dict[str, Any],
     source: Path | None,
     inputs: list[Path],
 ) -> str:
@@ -75,8 +75,8 @@ def render_run_toml(
     )
     run = tomlkit.table()
     for key in ("name", "description"):
-        if run_meta.get(key):
-            run.add(key, run_meta[key])
+        if run_metadata.get(key):
+            run.add(key, run_metadata[key])
     if run:
         doc.add("run", run)
     prov = tomlkit.table()

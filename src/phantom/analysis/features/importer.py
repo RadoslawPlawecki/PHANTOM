@@ -11,7 +11,7 @@ from phantom.config.feature_versions import FeatureConfigManager
 
 class FeatureImporter:
     def __init__(self, config_path: Path | str | None = None):
-        self.config_mgr = FeatureConfigManager(config_path)
+        self.feature_version_manager = FeatureConfigManager(config_path)
 
     def import_sources(
         self, sources: list[Path], version: str, create: bool, overwrite: bool = False
@@ -23,18 +23,18 @@ class FeatureImporter:
         ``overwrite``. Returns the raw directory and the sources that could
         not be copied.
         """
-        existing = self.config_mgr.get_existing_versions()
+        existing = self.feature_version_manager.get_existing_versions()
         if create:
             if version in existing:
                 raise ValueError(f"Version {version} already exists.")
             print(f"\n[INFO] Recording feature version {version} in the configuration...")
-            target = self.config_mgr.create_new_version(version)
+            target = self.feature_version_manager.create_new_version(version)
         else:
             if version not in existing:
                 raise ValueError(
                     f"Version {version} does not exist (create it with create = true)."
                 )
-            target = self.config_mgr.get_stage_dir(version, "raw")
+            target = self.feature_version_manager.get_stage_dir(version, "raw")
         return target, self._copy(sources, target, overwrite)
 
     @staticmethod

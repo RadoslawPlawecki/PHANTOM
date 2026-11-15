@@ -13,6 +13,7 @@ comes from config.toml.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import subprocess
 import tempfile
@@ -21,13 +22,17 @@ from pathlib import Path
 from typing import Any, Literal
 
 from phantom.config.loader import ConfigLoader
-from phantom.runner.params import param
+from phantom.runner.parameters import param
 from phantom.runner.stage import RunContext, Stage, register
+from phantom.stages._common import resolve_virus_identification_tool
 
 IDENTIFIERS = ("genomad", "vibrant", "virsorter2")
 PHABOX2_TASKS = ("cherry", "phagcn", "phavip")
 SAMPLES_HELP = 'sample ids to run, e.g. ["S1", "S2"]; default: every sample found'
-VTOOLS_HELP = "virus identification tools (keys of [tools]); default: all"
+VIRUS_IDENTIFICATION_TOOLS_HELP = (
+    "virus identification tools, by abbreviation or full name "
+    '(e.g. ["geN"] or ["genomad"]); default: all'
+)
 CORES_HELP = "Snakemake --cores (parallel jobs x threads); default: [workflow].cores"
 DRY_RUN_HELP = "only print what Snakemake would run (nothing is executed or stamped)"
 SETUP_TOOLS = (
@@ -42,41 +47,56 @@ SETUP_TOOLS = (
 )
 
 
-def _cfg(ctx: RunContext, section: str, key: str) -> Any:
-    value = ctx.config.get(section, {}).get(key)
+def _config_value(context: RunContext, section: str, key: str) -> Any:
+    value = context.config.get(section, {}).get(key)
     if value is None:
         raise ValueError(f"config.toml is missing [{section}].{key}")
     return value
 
 
-def _require(ctx: RunContext, keys: list[tuple[str, str]]) -> list[str]:
+def _require(context: RunContext, keys: list[tuple[str, str]]) -> list[str]:
     errors = []
     for section, key in keys:
-        if ctx.config.get(section, {}).get(key) is None:
+        if context.config.get(section, {}).get(key) is None:
             errors.append(f"config.toml is missing [{section}].{key}")
     return errors
 
 
-def _vtool_names(ctx: RunContext, vtools: list[str] | None) -> list[str]:
-    tools = ctx.config.get("tools", {})
-    return [tools[v] for v in (vtools or list(tools))]
+def _virus_identification_tool_names(
+    context: RunContext, virus_identification_tools: list[str] | None
+) -> list[str]:
+    tools = ConfigLoader.virus_identification_tools(context.config)
+    return [tools[v] for v in (virus_identification_tools or list(tools))]
 
 
-def _check_vtools(ctx: RunContext, vtools: list[str] | None) -> list[str]:
+def _resolve_virus_identification_tools(params, context: RunContext):
+    """Full tool names in ``vtools`` -> abbreviations (one job, one stamp either way)."""
+    if params.vtools is None:
+        return params
+    return dataclasses.replace(
+        params, vtools=[resolve_virus_identification_tool(context, v) for v in params.vtools]
+    )
+
+
+def _check_virus_identification_tools(
+    context: RunContext, virus_identification_tools: list[str] | None
+) -> list[str]:
     return [
-        f"vtool {v!r} not in [tools] (available: {', '.join(ctx.vtools)})"
-        for v in vtools or []
-        if v not in ctx.vtools
+        f"vtool {v!r} is not a virus identification tool (available: {', '.join(context.virus_identification_tools)})"
+        for v in virus_identification_tools or []
+        if v not in context.virus_identification_tools
     ]
 
 
 def snakemake_config(
-    ctx: RunContext, vtools: list[str] | None = None, samples: list[str] | None = None
+    context: RunContext,
+    virus_identification_tools: list[str] | None = None,
+    samples: list[str] | None = None,
 ) -> dict:
     """The --configfile Snakefile reads: absolute paths, envs, threads."""
-    sec = ctx.section_path
-    phanotate = ctx.config.get("phanotate", {})
-    tags = {m["tool"]: m["tag"] for m in ctx.modalities.values()}
+    sec = context.section_path
+    phanotate = context.config.get("phanotate", {})
+    tags = {modality["tool"]: modality["tag"] for modality in context.modalities.values()}
     return {
         "paths": {
             "assemblies": str(sec("assemblies")),
@@ -85,40 +105,46 @@ def snakemake_config(
             "checkv": str(sec("checkv")),
             "phabox2": str(sec("phabox2")),
             "phanotate_orfs": str(sec("phanotate")),
-            "phanotate_genes": str(ctx.resolve(phanotate.get("genes", ""))),
-            "phanotate_bed": str(ctx.resolve(phanotate.get("bed", ""))),
-            "phanotate_proteins": str(ctx.resolve(phanotate.get("proteins", ""))),
+            "phanotate_genes": str(context.resolve(phanotate.get("genes", ""))),
+            "phanotate_bed": str(context.resolve(phanotate.get("bed", ""))),
+            "phanotate_proteins": str(context.resolve(phanotate.get("proteins", ""))),
         },
-        "databases": {k: str(ctx.resolve(v)) for k, v in ctx.config.get("databases", {}).items()},
-        "software": {k: str(ctx.resolve(v)) for k, v in ctx.config.get("software", {}).items()},
-        "envs": dict(ctx.config.get("envs", {})),
-        "threads": dict(ctx.config.get("threads", {})),
-        "tools": dict(ctx.config.get("tools", {})),
-        "tags": tags,
-        "vtools": _vtool_names(ctx, vtools),
+        "databases": {
+            k: str(context.resolve(v)) for k, v in context.config.get("databases", {}).items()
+        },
+        "software": {
+            k: str(context.resolve(v)) for k, v in context.config.get("software", {}).items()
+        },
+        "envs": dict(context.config.get("envs", {})),
+        "threads": dict(context.config.get("threads", {})),
+        "virus_identification_tools": ConfigLoader.virus_identification_tools(context.config),
+        "filename_tags": tags,
+        "selected_virus_identification_tools": _virus_identification_tool_names(
+            context, virus_identification_tools
+        ),
         "samples": samples,
-        "setup_dir": str(ctx.resolve(_cfg(ctx, "workflow", "workdir")) / "setup"),
+        "setup_dir": str(context.resolve(_config_value(context, "workflow", "workdir")) / "setup"),
     }
 
 
 def snakemake_command(
-    ctx: RunContext,
+    context: RunContext,
     target: str | list[str],
     config_file: Path,
     cores: int | None = None,
     extra: list[str] | None = None,
 ) -> list[str]:
-    command = list(_cfg(ctx, "workflow", "snakemake"))
+    command = list(_config_value(context, "workflow", "snakemake"))
     return [
         *command,
         "--snakefile",
-        str(ConfigLoader.PROJECT_ROOT / _cfg(ctx, "workflow", "snakefile")),
+        str(ConfigLoader.PROJECT_ROOT / _config_value(context, "workflow", "snakefile")),
         "--directory",
-        str(ctx.resolve(_cfg(ctx, "workflow", "workdir"))),
+        str(context.resolve(_config_value(context, "workflow", "workdir"))),
         "--configfile",
         str(config_file),
         "--cores",
-        str(cores or _cfg(ctx, "workflow", "cores")),
+        str(cores or _config_value(context, "workflow", "cores")),
         "--use-conda",
         "--printshellcmds",
         *(extra or []),
@@ -127,22 +153,22 @@ def snakemake_command(
 
 
 def run_snakemake(
-    ctx: RunContext,
+    context: RunContext,
     target: str | list[str],
-    vtools: list[str] | None = None,
+    virus_identification_tools: list[str] | None = None,
     samples: list[str] | None = None,
     cores: int | None = None,
     extra: list[str] | None = None,
     dry_run: bool = False,
 ) -> subprocess.CompletedProcess:
-    workdir = ctx.resolve(_cfg(ctx, "workflow", "workdir"))
+    workdir = context.resolve(_config_value(context, "workflow", "workdir"))
     workdir.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".json", dir=workdir, delete=False) as f:
-        json.dump(snakemake_config(ctx, vtools, samples), f, indent=1)
+        json.dump(snakemake_config(context, virus_identification_tools, samples), f, indent=1)
         config_file = Path(f.name)
     try:
         extra = [*(extra or []), *(["--dry-run"] if dry_run else [])]
-        command = snakemake_command(ctx, target, config_file, cores, extra)
+        command = snakemake_command(context, target, config_file, cores, extra)
         print("[INFO] " + " ".join(command), flush=True)
         result = subprocess.run(command, check=False)  # noqa: S603 -- argv from config.toml
         if result.returncode != 0:
@@ -152,7 +178,7 @@ def run_snakemake(
         config_file.unlink(missing_ok=True)
 
 
-# --- virus identification -------------------------------------------------------
+# virus identification
 
 
 @dataclass(frozen=True)
@@ -166,32 +192,38 @@ class _Identify(Stage):
     tool: str
     Params = IdentifyParams
 
-    def validate(self, p: IdentifyParams, ctx: RunContext) -> list[str]:
+    def validate(self, params: IdentifyParams, context: RunContext) -> list[str]:
         # [envs] / [software] entries are optional: without them the pinned
         # workflow/envs/<tool>.yaml environment and the bioconda package are used.
         keys = [(self.tool, "path"), ("assemblies", "path")]
         keys += [("threads", self.tool), ("workflow", "snakemake")]
         keys += [("databases", "genomad")] if self.tool == "genomad" else []
-        return _require(ctx, keys)
+        return _require(context, keys)
 
-    def check_inputs(self, p: IdentifyParams, ctx: RunContext) -> list[str]:
-        assemblies = ctx.section_path("assemblies")
+    def check_inputs(self, params: IdentifyParams, context: RunContext) -> list[str]:
+        assemblies = context.section_path("assemblies")
         if not assemblies.is_dir() or not any(assemblies.glob("S*.fa")):
             return [f"no assemblies (S<n>.fa) in {assemblies} -- run preprocessing.samples first"]
         return []
 
-    def label(self, p: IdentifyParams) -> str:
-        return ", ".join(p.samples) if p.samples else "all samples"
+    def label(self, params: IdentifyParams) -> str:
+        return ", ".join(params.samples) if params.samples else "all samples"
 
-    def inputs(self, p: IdentifyParams, ctx: RunContext) -> list[Path]:
-        return [ctx.section_path("assemblies")]
+    def inputs(self, params: IdentifyParams, context: RunContext) -> list[Path]:
+        return [context.section_path("assemblies")]
 
-    def writes(self, p: IdentifyParams, ctx: RunContext) -> list[Path]:
-        return [ctx.section_path(self.tool)]
+    def writes(self, params: IdentifyParams, context: RunContext) -> list[Path]:
+        return [context.section_path(self.tool)]
 
-    def run(self, p: IdentifyParams, ctx: RunContext) -> list[Path] | None:
-        run_snakemake(ctx, f"all_{self.tool}", samples=p.samples, cores=p.cores, dry_run=p.dry_run)
-        return None if p.dry_run else [ctx.section_path(self.tool)]
+    def run(self, params: IdentifyParams, context: RunContext) -> list[Path] | None:
+        run_snakemake(
+            context,
+            f"all_{self.tool}",
+            samples=params.samples,
+            cores=params.cores,
+            dry_run=params.dry_run,
+        )
+        return None if params.dry_run else [context.section_path(self.tool)]
 
 
 @register
@@ -215,25 +247,28 @@ class Virsorter2(_Identify):
     tool = "virsorter2"
 
 
-# --- tools on collected genomes ----------------------------------------------
+# tools on collected genomes
 
 
 @dataclass(frozen=True)
 class GenomeToolParams:
-    vtools: list[str] | None = param(None, help=VTOOLS_HELP)
+    vtools: list[str] | None = param(None, help=VIRUS_IDENTIFICATION_TOOLS_HELP)
     samples: list[str] | None = param(None, help=SAMPLES_HELP)
     cores: int | None = param(None, help=CORES_HELP)
     dry_run: bool = param(False, help=DRY_RUN_HELP)
 
 
-def _genome_dirs(ctx: RunContext, vtools: list[str] | None) -> list[Path]:
-    return [ctx.section_path("genomes") / name for name in _vtool_names(ctx, vtools)]
+def _genome_dirs(context: RunContext, virus_identification_tools: list[str] | None) -> list[Path]:
+    return [
+        context.section_path("genomes") / name
+        for name in _virus_identification_tool_names(context, virus_identification_tools)
+    ]
 
 
-def _check_genomes(ctx: RunContext, vtools: list[str] | None) -> list[str]:
+def _check_genomes(context: RunContext, virus_identification_tools: list[str] | None) -> list[str]:
     return [
         f"no collected genomes (*.fna) in {d} -- run preprocessing.collect first"
-        for d in _genome_dirs(ctx, vtools)
+        for d in _genome_dirs(context, virus_identification_tools)
         if not d.is_dir() or not any(d.glob("*.fna"))
     ]
 
@@ -244,25 +279,40 @@ class Checkv(Stage):
     summary = "CheckV end-to-end on every collected genome file"
     Params = GenomeToolParams
 
-    def validate(self, p: GenomeToolParams, ctx: RunContext) -> list[str]:
+    def resolve(self, params, context: RunContext):
+        return _resolve_virus_identification_tools(params, context)
+
+    def validate(self, params: GenomeToolParams, context: RunContext) -> list[str]:
         keys = [("checkv", "path"), ("databases", "checkv")]
-        return _check_vtools(ctx, p.vtools) + _require(ctx, [*keys, ("threads", "checkv")])
+        return _check_virus_identification_tools(context, params.vtools) + _require(
+            context, [*keys, ("threads", "checkv")]
+        )
 
-    def check_inputs(self, p: GenomeToolParams, ctx: RunContext) -> list[str]:
-        return _check_genomes(ctx, p.vtools)
+    def check_inputs(self, params: GenomeToolParams, context: RunContext) -> list[str]:
+        return _check_genomes(context, params.vtools)
 
-    def label(self, p: GenomeToolParams) -> str:
-        return ", ".join(p.vtools) if p.vtools else "all vtools"
+    def label(self, params: GenomeToolParams) -> str:
+        return ", ".join(params.vtools) if params.vtools else "all vtools"
 
-    def inputs(self, p: GenomeToolParams, ctx: RunContext) -> list[Path]:
-        return _genome_dirs(ctx, p.vtools)
+    def inputs(self, params: GenomeToolParams, context: RunContext) -> list[Path]:
+        return _genome_dirs(context, params.vtools)
 
-    def writes(self, p: GenomeToolParams, ctx: RunContext) -> list[Path]:
-        return [ctx.section_path("checkv") / n for n in _vtool_names(ctx, p.vtools)]
+    def writes(self, params: GenomeToolParams, context: RunContext) -> list[Path]:
+        return [
+            context.section_path("checkv") / n
+            for n in _virus_identification_tool_names(context, params.vtools)
+        ]
 
-    def run(self, p: GenomeToolParams, ctx: RunContext) -> list[Path] | None:
-        run_snakemake(ctx, "all_checkv", p.vtools, p.samples, p.cores, dry_run=p.dry_run)
-        return None if p.dry_run else [d for d in self.writes(p, ctx) if d.is_dir()]
+    def run(self, params: GenomeToolParams, context: RunContext) -> list[Path] | None:
+        run_snakemake(
+            context,
+            "all_checkv",
+            params.vtools,
+            params.samples,
+            params.cores,
+            dry_run=params.dry_run,
+        )
+        return None if params.dry_run else [d for d in self.writes(params, context) if d.is_dir()]
 
 
 @register
@@ -271,31 +321,45 @@ class Phanotate(Stage):
     summary = "PHANOTATE ORFs per genome file: gff -> bed -> ORF fasta -> proteins"
     Params = GenomeToolParams
 
-    def _dirs(self, ctx: RunContext) -> list[Path]:
-        ph = ctx.config.get("phanotate", {})
-        return [ctx.resolve(ph[k]) for k in ("genes", "bed", "proteins")] + [
-            ctx.section_path("phanotate")
+    def resolve(self, params, context: RunContext):
+        return _resolve_virus_identification_tools(params, context)
+
+    def _dirs(self, context: RunContext) -> list[Path]:
+        ph = context.config.get("phanotate", {})
+        return [context.resolve(ph[k]) for k in ("genes", "bed", "proteins")] + [
+            context.section_path("phanotate")
         ]
 
-    def validate(self, p: GenomeToolParams, ctx: RunContext) -> list[str]:
+    def validate(self, params: GenomeToolParams, context: RunContext) -> list[str]:
         keys = [("phanotate", k) for k in ("path", "genes", "bed", "proteins")]
-        return _check_vtools(ctx, p.vtools) + _require(ctx, keys)
+        return _check_virus_identification_tools(context, params.vtools) + _require(context, keys)
 
-    def check_inputs(self, p: GenomeToolParams, ctx: RunContext) -> list[str]:
-        return _check_genomes(ctx, p.vtools)
+    def check_inputs(self, params: GenomeToolParams, context: RunContext) -> list[str]:
+        return _check_genomes(context, params.vtools)
 
-    def label(self, p: GenomeToolParams) -> str:
-        return ", ".join(p.vtools) if p.vtools else "all vtools"
+    def label(self, params: GenomeToolParams) -> str:
+        return ", ".join(params.vtools) if params.vtools else "all vtools"
 
-    def inputs(self, p: GenomeToolParams, ctx: RunContext) -> list[Path]:
-        return _genome_dirs(ctx, p.vtools)
+    def inputs(self, params: GenomeToolParams, context: RunContext) -> list[Path]:
+        return _genome_dirs(context, params.vtools)
 
-    def writes(self, p: GenomeToolParams, ctx: RunContext) -> list[Path]:
-        return [d / n for d in self._dirs(ctx) for n in _vtool_names(ctx, p.vtools)]
+    def writes(self, params: GenomeToolParams, context: RunContext) -> list[Path]:
+        return [
+            d / n
+            for d in self._dirs(context)
+            for n in _virus_identification_tool_names(context, params.vtools)
+        ]
 
-    def run(self, p: GenomeToolParams, ctx: RunContext) -> list[Path] | None:
-        run_snakemake(ctx, "all_phanotate", p.vtools, p.samples, p.cores, dry_run=p.dry_run)
-        return None if p.dry_run else [d for d in self.writes(p, ctx) if d.is_dir()]
+    def run(self, params: GenomeToolParams, context: RunContext) -> list[Path] | None:
+        run_snakemake(
+            context,
+            "all_phanotate",
+            params.vtools,
+            params.samples,
+            params.cores,
+            dry_run=params.dry_run,
+        )
+        return None if params.dry_run else [d for d in self.writes(params, context) if d.is_dir()]
 
 
 @dataclass(frozen=True)
@@ -304,7 +368,7 @@ class Phabox2Params:
         default_factory=lambda: list(PHABOX2_TASKS),
         help="cherry/phagcn run on genomes, phavip on PHANOTATE ORFs",
     )
-    vtools: list[str] | None = param(None, help=VTOOLS_HELP)
+    vtools: list[str] | None = param(None, help=VIRUS_IDENTIFICATION_TOOLS_HELP)
     samples: list[str] | None = param(None, help=SAMPLES_HELP)
     cores: int | None = param(None, help=CORES_HELP)
     dry_run: bool = param(False, help=DRY_RUN_HELP)
@@ -316,14 +380,17 @@ class Phabox2(Stage):
     summary = "PhaBOX2 host (cherry), taxonomy (phagcn) and gene function (phavip)"
     Params = Phabox2Params
 
-    def validate(self, p: Phabox2Params, ctx: RunContext) -> list[str]:
-        errors = _check_vtools(ctx, p.vtools)
-        if not p.tasks:
+    def resolve(self, params, context: RunContext):
+        return _resolve_virus_identification_tools(params, context)
+
+    def validate(self, params: Phabox2Params, context: RunContext) -> list[str]:
+        errors = _check_virus_identification_tools(context, params.vtools)
+        if not params.tasks:
             errors.append("tasks: give at least one of cherry, phagcn, phavip")
-        tags = {m["tool"] for m in ctx.modalities.values()}
+        tags = {modality["tool"] for modality in context.modalities.values()}
         errors += [
             f"no [modalities] entry with tool = {t!r} (its filename tag)"
-            for t in p.tasks
+            for t in params.tasks
             if t not in tags
         ]
         keys = [
@@ -331,43 +398,52 @@ class Phabox2(Stage):
             ("databases", "phabox2"),
             ("threads", "phabox2"),
         ]
-        return errors + _require(ctx, keys)
+        return errors + _require(context, keys)
 
-    def check_inputs(self, p: Phabox2Params, ctx: RunContext) -> list[str]:
+    def check_inputs(self, params: Phabox2Params, context: RunContext) -> list[str]:
         errors = []
-        if {"cherry", "phagcn"} & set(p.tasks):
-            errors += _check_genomes(ctx, p.vtools)
-        if "phavip" in p.tasks:
-            orfs = ctx.section_path("phanotate")
+        if {"cherry", "phagcn"} & set(params.tasks):
+            errors += _check_genomes(context, params.vtools)
+        if "phavip" in params.tasks:
+            orfs = context.section_path("phanotate")
             errors += [
                 f"no PHANOTATE ORFs in {orfs / n} -- run tools.phanotate first"
-                for n in _vtool_names(ctx, p.vtools)
+                for n in _virus_identification_tool_names(context, params.vtools)
                 if not (orfs / n).is_dir() or not any((orfs / n).glob("*.fna"))
             ]
         return errors
 
-    def label(self, p: Phabox2Params) -> str:
-        return " + ".join(p.tasks)
+    def label(self, params: Phabox2Params) -> str:
+        return " + ".join(params.tasks)
 
-    def inputs(self, p: Phabox2Params, ctx: RunContext) -> list[Path]:
+    def inputs(self, params: Phabox2Params, context: RunContext) -> list[Path]:
         dirs = []
-        if {"cherry", "phagcn"} & set(p.tasks):
-            dirs += _genome_dirs(ctx, p.vtools)
-        if "phavip" in p.tasks:
-            dirs += [ctx.section_path("phanotate") / n for n in _vtool_names(ctx, p.vtools)]
+        if {"cherry", "phagcn"} & set(params.tasks):
+            dirs += _genome_dirs(context, params.vtools)
+        if "phavip" in params.tasks:
+            dirs += [
+                context.section_path("phanotate") / n
+                for n in _virus_identification_tool_names(context, params.vtools)
+            ]
         return dirs
 
-    def writes(self, p: Phabox2Params, ctx: RunContext) -> list[Path]:
-        root = ctx.section_path("phabox2")
-        return [root / t / n for t in p.tasks for n in _vtool_names(ctx, p.vtools)]
+    def writes(self, params: Phabox2Params, context: RunContext) -> list[Path]:
+        root = context.section_path("phabox2")
+        return [
+            root / t / n
+            for t in params.tasks
+            for n in _virus_identification_tool_names(context, params.vtools)
+        ]
 
-    def run(self, p: Phabox2Params, ctx: RunContext) -> list[Path] | None:
-        targets = [f"all_phabox2_{task}" for task in p.tasks]
-        run_snakemake(ctx, targets, p.vtools, p.samples, p.cores, dry_run=p.dry_run)
-        return None if p.dry_run else [d for d in self.writes(p, ctx) if d.is_dir()]
+    def run(self, params: Phabox2Params, context: RunContext) -> list[Path] | None:
+        targets = [f"all_phabox2_{task}" for task in params.tasks]
+        run_snakemake(
+            context, targets, params.vtools, params.samples, params.cores, dry_run=params.dry_run
+        )
+        return None if params.dry_run else [d for d in self.writes(params, context) if d.is_dir()]
 
 
-# --- installation -------------------------------------------------------------
+# installation
 
 
 @dataclass(frozen=True)
@@ -400,24 +476,24 @@ class Setup(Stage):
     summary = "Install external tools (conda envs + databases) and check they run"
     Params = SetupParams
 
-    def validate(self, p: SetupParams, ctx: RunContext) -> list[str]:
+    def validate(self, params: SetupParams, context: RunContext) -> list[str]:
         return _require(
-            ctx, [("workflow", "snakemake"), ("workflow", "snakefile"), ("workflow", "workdir")]
+            context, [("workflow", "snakemake"), ("workflow", "snakefile"), ("workflow", "workdir")]
         )
 
-    def label(self, p: SetupParams) -> str:
-        return ", ".join(p.tools)
+    def label(self, params: SetupParams) -> str:
+        return ", ".join(params.tools)
 
-    def inputs(self, p: SetupParams, ctx: RunContext) -> list[Path]:
+    def inputs(self, params: SetupParams, context: RunContext) -> list[Path]:
         return []
 
-    def writes(self, p: SetupParams, ctx: RunContext) -> list[Path]:
-        return [ctx.resolve(_cfg(ctx, "workflow", "workdir")) / "setup"]
+    def writes(self, params: SetupParams, context: RunContext) -> list[Path]:
+        return [context.resolve(_config_value(context, "workflow", "workdir")) / "setup"]
 
-    def run(self, p: SetupParams, ctx: RunContext) -> list[Path] | None:
-        setup_dir = ctx.resolve(_cfg(ctx, "workflow", "workdir")) / "setup"
+    def run(self, params: SetupParams, context: RunContext) -> list[Path] | None:
+        setup_dir = context.resolve(_config_value(context, "workflow", "workdir")) / "setup"
         # The markers are cheap to recreate; always recheck that tools start.
-        for tool in p.tools:
+        for tool in params.tools:
             (setup_dir / f"{tool}.ok").unlink(missing_ok=True)
-        run_snakemake(ctx, [f"setup_{t}" for t in p.tools], dry_run=p.dry_run)
-        return None if p.dry_run else [setup_dir]
+        run_snakemake(context, [f"setup_{t}" for t in params.tools], dry_run=params.dry_run)
+        return None if params.dry_run else [setup_dir]

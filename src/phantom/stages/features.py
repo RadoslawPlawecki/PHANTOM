@@ -18,7 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from phantom.runner.params import param
+from phantom.config.loader import ConfigLoader
+from phantom.runner.parameters import param
 from phantom.runner.stage import RunContext, Stage, register
 from phantom.stages._common import check_version
 
@@ -39,22 +40,22 @@ def _pipeline_flags(tool: str) -> tuple[bool, bool]:
 
 
 def _tool_dirs(
-    ctx: RunContext, version: str, stage: str, tools: Sequence[str] | None
+    context: RunContext, version: str, stage: str, tools: Sequence[str] | None
 ) -> list[Path]:
     """The stage dir itself (all tools) or one subdirectory per requested tool."""
-    root = ctx.stage_dir(version, stage)
+    root = context.stage_dir(version, stage)
     return [root] if tools is None else [root / t for t in tools]
 
 
 def _present_tools(
-    ctx: RunContext, version: str, stage: str, tools: Sequence[str] | None
+    context: RunContext, version: str, stage: str, tools: Sequence[str] | None
 ) -> list[str]:
-    root = ctx.stage_dir(version, stage)
+    root = context.stage_dir(version, stage)
     wanted = TOOLS if tools is None else tools
     return [t for t in TOOLS if t in wanted and (root / t).is_dir()]
 
 
-# --- features.import ----------------------------------------------------------
+# features.import
 
 
 @dataclass(frozen=True)
@@ -73,46 +74,59 @@ class Import(Stage):
     summary = "Copy external tool outputs into a (new) feature version's raw stage"
     Params = ImportParams
 
-    def announces(self, p: ImportParams) -> list[str]:
-        return [p.version] if p.create else []
+    def announces(self, params: ImportParams) -> list[str]:
+        return [params.version] if params.create else []
 
-    def validate(self, p: ImportParams, ctx: RunContext) -> list[str]:
+    def validate(self, params: ImportParams, context: RunContext) -> list[str]:
         errors = []
-        if p.create and p.version in ctx.feature_versions():
-            errors.append(f"version {p.version!r} already exists; use create = false to add to it")
-        if not p.create:
-            errors += check_version(p.version, ctx)
-        if not p.sources:
+        # Rerunning the step that created the version is fine; reusing a
+        # version some other import created is refused.
+        if (
+            params.create
+            and params.version in context.feature_versions()
+            and not context.ran_before(self.name, params)
+        ):
+            errors.append(
+                f"version {params.version!r} already exists; use create = false to add to it, "
+                "or choose a new version number"
+            )
+        if not params.create:
+            errors += check_version(params.version, context)
+        if not params.sources:
             errors.append("sources: give at least one path")
         return errors
 
-    def check_inputs(self, p: ImportParams, ctx: RunContext) -> list[str]:
-        return [f"source not found: {s}" for s in p.sources if not ctx.resolve(s).exists()]
+    def check_inputs(self, params: ImportParams, context: RunContext) -> list[str]:
+        return [f"source not found: {s}" for s in params.sources if not context.resolve(s).exists()]
 
-    def label(self, p: ImportParams) -> str:
-        return f"{len(p.sources)} source(s) -> {p.version}"
+    def label(self, params: ImportParams) -> str:
+        return f"{len(params.sources)} source(s) -> {params.version}"
 
-    def inputs(self, p: ImportParams, ctx: RunContext) -> list[Path]:
-        return [ctx.resolve(s) for s in p.sources]
+    def inputs(self, params: ImportParams, context: RunContext) -> list[Path]:
+        return [context.resolve(s) for s in params.sources]
 
-    def writes(self, p: ImportParams, ctx: RunContext) -> list[Path]:
-        return [ctx.stage_dir(p.version, "raw")]
+    def writes(self, params: ImportParams, context: RunContext) -> list[Path]:
+        return [context.stage_dir(params.version, "raw")]
 
-    def run(self, p: ImportParams, ctx: RunContext) -> list[Path]:
+    def run(self, params: ImportParams, context: RunContext) -> list[Path]:
         from phantom.analysis.features.importer import FeatureImporter
 
-        importer = FeatureImporter(config_path=ctx.config_path)
+        importer = FeatureImporter(config_path=context.config_path)
+        create = params.create and params.version not in context.feature_versions()  # else: a rerun
         raw_dir, failed = importer.import_sources(
-            [ctx.resolve(s) for s in p.sources], p.version, create=p.create, overwrite=p.overwrite
+            [context.resolve(s) for s in params.sources],
+            params.version,
+            create=create,
+            overwrite=params.overwrite,
         )
         if failed:
             raise RuntimeError("could not copy: " + "; ".join(failed))
-        if p.create:
-            ctx.reload()  # config.toml gained a [features.vX_Y] block
+        if create:
+            context.reload()  # config.toml gained a [features.vX_Y] block
         return [raw_dir]
 
 
-# --- features.merge -----------------------------------------------------------
+# features.merge
 
 
 @dataclass(frozen=True)
@@ -130,31 +144,31 @@ class Merge(Stage):
     summary = "Concatenate per-sample raw files into one merged file per tool/vtool"
     Params = MergeParams
 
-    def choices(self, ctx: RunContext) -> dict[str, list]:
-        return {"version": ctx.feature_versions()}
+    def choices(self, context: RunContext) -> dict[str, list]:
+        return {"version": context.feature_versions()}
 
-    def _concatenator(self, p: MergeParams, ctx: RunContext):
-        from phantom.analysis.features.concatenator import FeatureConcatenator
+    def _merger(self, params: MergeParams, context: RunContext):
+        from phantom.analysis.features.merger import FeatureMerger
 
-        return FeatureConcatenator(p.version, ctx.config_mgr, p.id_columns)
+        return FeatureMerger(params.version, context.feature_version_manager, params.id_columns)
 
-    def validate(self, p: MergeParams, ctx: RunContext) -> list[str]:
-        errors = check_version(p.version, ctx)
-        if not p.id_columns:
+    def validate(self, params: MergeParams, context: RunContext) -> list[str]:
+        errors = check_version(params.version, context)
+        if not params.id_columns:
             errors.append('id_columns: give at least one pattern, e.g. { "*" = "Accession" }')
         return errors
 
-    def check_inputs(self, p: MergeParams, ctx: RunContext) -> list[str]:
-        concat = self._concatenator(p, ctx)
-        leaves = concat.leaf_dirs()
+    def check_inputs(self, params: MergeParams, context: RunContext) -> list[str]:
+        merger = self._merger(params, context)
+        leaves = merger.leaf_dirs()
         if not leaves:
-            return [f"no .tsv/.csv files under {concat.raw_dir}"]
+            return [f"no .tsv/.csv files under {merger.raw_dir}"]
         errors = []
         for leaf in leaves:
-            label = str(leaf.relative_to(concat.raw_dir))
-            first = concat.raw_files(leaf)[0]
-            columns = concat.peek_columns(first)
-            column = concat.id_column_for(label)
+            label = str(leaf.relative_to(merger.raw_dir))
+            first = merger.raw_files(leaf)[0]
+            columns = merger.peek_columns(first)
+            column = merger.id_column_for(label)
             if column is None:
                 errors.append(f"id_columns: no pattern matches raw/{label}")
             elif column not in columns:
@@ -164,21 +178,21 @@ class Merge(Stage):
                 )
         return errors
 
-    def label(self, p: MergeParams) -> str:
-        return p.version
+    def label(self, params: MergeParams) -> str:
+        return params.version
 
-    def inputs(self, p: MergeParams, ctx: RunContext) -> list[Path]:
-        return [ctx.stage_dir(p.version, "raw")]
+    def inputs(self, params: MergeParams, context: RunContext) -> list[Path]:
+        return [context.stage_dir(params.version, "raw")]
 
-    def writes(self, p: MergeParams, ctx: RunContext) -> list[Path]:
-        return [ctx.stage_dir(p.version, "raw_merged")]
+    def writes(self, params: MergeParams, context: RunContext) -> list[Path]:
+        return [context.stage_dir(params.version, "raw_merged")]
 
-    def run(self, p: MergeParams, ctx: RunContext) -> list[Path]:
-        written = self._concatenator(p, ctx).run()
+    def run(self, params: MergeParams, context: RunContext) -> list[Path]:
+        written = self._merger(params, context).run()
         return sorted({f.parent for f in written})
 
 
-# --- features.preprocess ------------------------------------------------------
+# features.preprocess
 
 
 @dataclass(frozen=True)
@@ -196,69 +210,79 @@ class Preprocess(Stage):
     summary = "Per-tool cleaning of merged files (optionally CheckV-masked)"
     Params = PreprocessParams
 
-    def choices(self, ctx: RunContext) -> dict[str, list]:
-        masks = ctx.section_path("masks")
-        names = sorted({m.name for m in masks.glob("*/*.tsv")}) if masks.is_dir() else []
-        return {"version": ctx.feature_versions(), "mask": names}
+    def choices(self, context: RunContext) -> dict[str, list]:
+        masks = context.section_path("masks")
+        names = (
+            sorted({mask_file.name for mask_file in masks.glob("*/*.tsv")})
+            if masks.is_dir()
+            else []
+        )
+        return {"version": context.feature_versions(), "mask": names}
 
-    def _mask_files(self, p: PreprocessParams, ctx: RunContext) -> list[Path]:
+    def _mask_files(self, params: PreprocessParams, context: RunContext) -> list[Path]:
         """The mask file of every configured vtool (one per vtool directory)."""
-        if not p.mask:
+        if not params.mask:
             return []
-        root = ctx.section_path("masks")
-        return [root / tool_name / p.mask for tool_name in ctx.config.get("tools", {}).values()]
+        root = context.section_path("masks")
+        return [
+            root / tool_name / params.mask
+            for tool_name in ConfigLoader.virus_identification_tools(context.config).values()
+        ]
 
-    def validate(self, p: PreprocessParams, ctx: RunContext) -> list[str]:
-        errors = check_version(p.version, ctx)
-        if p.mask and not ctx.config.get("masks", {}).get("path"):
+    def validate(self, params: PreprocessParams, context: RunContext) -> list[str]:
+        errors = check_version(params.version, context)
+        if params.mask and not context.config.get("masks", {}).get("path"):
             errors.append("config.toml is missing [masks].path")
         return errors
 
-    def check_inputs(self, p: PreprocessParams, ctx: RunContext) -> list[str]:
+    def check_inputs(self, params: PreprocessParams, context: RunContext) -> list[str]:
         from phantom.analysis.features.preprocessor import mask_dir_for
 
-        root = ctx.stage_dir(p.version, "raw_merged")
+        root = context.stage_dir(params.version, "raw_merged")
         files = [
             f
-            for t in _present_tools(ctx, p.version, "raw_merged", p.tools)
+            for t in _present_tools(context, params.version, "raw_merged", params.tools)
             for f in sorted((root / t).glob("*.csv"))
         ]
         if not files:
-            wanted = ", ".join(p.tools) if p.tools else "any tool"
+            wanted = ", ".join(params.tools) if params.tools else "any tool"
             return [f"no merged files for {wanted} under {root}"]
         errors = []
         for f in files:
             try:
-                mask_dir = mask_dir_for(f, ctx.config)
+                mask_dir = mask_dir_for(f, context.config)
             except ValueError as e:
                 errors.append(str(e))
                 continue
-            if p.mask and not (mask_dir / p.mask).is_file():
-                errors.append(f"mask not found: {mask_dir / p.mask}")
+            if params.mask and not (mask_dir / params.mask).is_file():
+                errors.append(f"mask not found: {mask_dir / params.mask}")
         return errors
 
-    def label(self, p: PreprocessParams) -> str:
-        return f"{p.version} / mask: {p.mask or 'none'}"
+    def label(self, params: PreprocessParams) -> str:
+        return f"{params.version} / mask: {params.mask or 'none'}"
 
-    def inputs(self, p: PreprocessParams, ctx: RunContext) -> list[Path]:
-        return [*_tool_dirs(ctx, p.version, "raw_merged", p.tools), *self._mask_files(p, ctx)]
+    def inputs(self, params: PreprocessParams, context: RunContext) -> list[Path]:
+        return [
+            *_tool_dirs(context, params.version, "raw_merged", params.tools),
+            *self._mask_files(params, context),
+        ]
 
-    def writes(self, p: PreprocessParams, ctx: RunContext) -> list[Path]:
-        return _tool_dirs(ctx, p.version, "preprocessed", p.tools)
+    def writes(self, params: PreprocessParams, context: RunContext) -> list[Path]:
+        return _tool_dirs(context, params.version, "preprocessed", params.tools)
 
-    def run(self, p: PreprocessParams, ctx: RunContext) -> list[Path]:
+    def run(self, params: PreprocessParams, context: RunContext) -> list[Path]:
         from phantom.analysis.features.preprocessor import FeaturePreprocessor
 
         return FeaturePreprocessor(
-            p.version,
-            ctx.config,
-            ctx.config_mgr,
-            mask=p.mask,
-            tools=_present_tools(ctx, p.version, "raw_merged", p.tools),
+            params.version,
+            context.config,
+            context.feature_version_manager,
+            mask=params.mask,
+            tools=_present_tools(context, params.version, "raw_merged", params.tools),
         ).run()
 
 
-# --- features.extract ---------------------------------------------------------
+# features.extract
 
 
 @dataclass(frozen=True)
@@ -288,21 +312,21 @@ class Extract(Stage):
     summary = "Build per-tool feature matrices from preprocessed data"
     Params = ExtractParams
 
-    def choices(self, ctx: RunContext) -> dict[str, list]:
-        return {"version": ctx.feature_versions()}
+    def choices(self, context: RunContext) -> dict[str, list]:
+        return {"version": context.feature_versions()}
 
-    def validate(self, p: ExtractParams, ctx: RunContext) -> list[str]:
-        errors = check_version(p.version, ctx)
-        candidates = TOOLS if p.tools is None else p.tools
+    def validate(self, params: ExtractParams, context: RunContext) -> list[str]:
+        errors = check_version(params.version, context)
+        candidates = TOOLS if params.tools is None else params.tools
         col_tools = [t for t in candidates if _pipeline_flags(t)[0]]
         opt_tools = [t for t in candidates if _pipeline_flags(t)[1]]
         errors += [
             f"feature_col: {k!r} is not a tool of this step that uses a column "
             f"({', '.join(col_tools) or 'none'})"
-            for k in p.feature_col
+            for k in params.feature_col
             if k not in col_tools
         ]
-        for name, value in (("binary", p.binary), ("min_patients", p.min_patients)):
+        for name, value in (("binary", params.binary), ("min_patients", params.min_patients)):
             if isinstance(value, dict):
                 errors += [
                     f"{name}: {k!r} is not a tool of this step that uses matrix options "
@@ -310,24 +334,28 @@ class Extract(Stage):
                     for k in value
                     if k not in opt_tools
                 ]
-        mins = p.min_patients.values() if isinstance(p.min_patients, dict) else [p.min_patients]
+        mins = (
+            params.min_patients.values()
+            if isinstance(params.min_patients, dict)
+            else [params.min_patients]
+        )
         errors += [
-            f"min_patients must be 1-{MAX_MIN_PATIENTS}, got {m}"
-            for m in mins
-            if m is not None and not 1 <= m <= MAX_MIN_PATIENTS
+            f"min_patients must be 1-{MAX_MIN_PATIENTS}, got {minimum}"
+            for minimum in mins
+            if minimum is not None and not 1 <= minimum <= MAX_MIN_PATIENTS
         ]
         return errors
 
-    def check_inputs(self, p: ExtractParams, ctx: RunContext) -> list[str]:
+    def check_inputs(self, params: ExtractParams, context: RunContext) -> list[str]:
         import pandas as pd
 
-        root = ctx.stage_dir(p.version, "preprocessed")
-        tools = _present_tools(ctx, p.version, "preprocessed", p.tools)
+        root = context.stage_dir(params.version, "preprocessed")
+        tools = _present_tools(context, params.version, "preprocessed", params.tools)
         if not tools:
             return [f"no preprocessed data under {root}"]
         errors = []
         for tool in (t for t in tools if _pipeline_flags(t)[0]):
-            col = p.feature_col.get(tool)
+            col = params.feature_col.get(tool)
             if col is None:
                 errors.append(f"feature_col: give a column for {tool}")
                 continue
@@ -340,23 +368,23 @@ class Extract(Stage):
                     )
         return errors
 
-    def label(self, p: ExtractParams) -> str:
-        return p.version
+    def label(self, params: ExtractParams) -> str:
+        return params.version
 
-    def inputs(self, p: ExtractParams, ctx: RunContext) -> list[Path]:
-        return _tool_dirs(ctx, p.version, "preprocessed", p.tools)
+    def inputs(self, params: ExtractParams, context: RunContext) -> list[Path]:
+        return _tool_dirs(context, params.version, "preprocessed", params.tools)
 
-    def writes(self, p: ExtractParams, ctx: RunContext) -> list[Path]:
-        return _tool_dirs(ctx, p.version, "extracted", p.tools)
+    def writes(self, params: ExtractParams, context: RunContext) -> list[Path]:
+        return _tool_dirs(context, params.version, "extracted", params.tools)
 
-    def run(self, p: ExtractParams, ctx: RunContext) -> list[Path]:
+    def run(self, params: ExtractParams, context: RunContext) -> list[Path]:
         from phantom.analysis.features.extractor import FeatureExtractor
 
         return FeatureExtractor(
-            p.version,
-            ctx.config_mgr,
-            feature_col=p.feature_col,
-            binary=p.binary,
-            min_patients=p.min_patients,
-            tools=_present_tools(ctx, p.version, "preprocessed", p.tools),
+            params.version,
+            context.feature_version_manager,
+            feature_col=params.feature_col,
+            binary=params.binary,
+            min_patients=params.min_patients,
+            tools=_present_tools(context, params.version, "preprocessed", params.tools),
         ).run()

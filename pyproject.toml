@@ -1,3 +1,6 @@
+# The Python package: name, version, dependencies, the `phantom` command, and the
+# settings of the development tools (pytest, coverage, ruff, mypy, codespell).
+
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -11,12 +14,10 @@ requires-python = ">=3.11"
 dependencies = [
     "catboost>=1.2.10",
     "imbalanced_learn>=0.14.2",
-    "imblearn>=0.0",
     "matplotlib>=3.11.2",
     "numpy>=2.5.3",
     "optuna>=5.0.0",
     "pandas>=3.0.6",
-    "scikit_bio>=0.7.4",
     "scikit_learn>=1.9.1",
     "scipy>=1.18.0",
     "seaborn>=0.13.2",
@@ -35,8 +36,6 @@ dev = [
     "pytest-cov>=5",
     "pytest-xdist>=3",
     "pytest-randomly>=5.0.0",
-    "freezegun>=1.5",
-    "hypothesis>=6.168.1",
     "coverage[toml]>=7.16.1",
     "pre-commit>=4.0",
     "mypy>=1.14",
@@ -50,18 +49,22 @@ where = ["src"]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config --import-mode=importlib"
 pythonpath = ["."]
-norecursedirs = ["fixtures", "_helpers"]
+norecursedirs = ["_helpers", "golden"]
+filterwarnings = [
+    # seaborn's boxplot still passes matplotlib's deprecated `vert`; not ours to fix.
+    "ignore:vert. bool was deprecated:matplotlib.MatplotlibDeprecationWarning:seaborn",
+]
 markers = [
-    "slow: real catboost/xgb/PERMANOVA or large Optuna budgets (nightly only)",
-    "ml: exercises classification/ml on a real estimator",
-    "property: hypothesis-based",
-    "integration: touches the filesystem / multi-component",
-    "critical: covers a business-critical path",
-    "flaky: known non-deterministic, quarantined (non-blocking job)",
+    # The three kinds, set from the folder in tests/conftest.py; CI runs them in this order.
+    "unit: one module or pipeline step on small data (tests/ except regression/, e2e/)",
+    "regression: the example pipeline's results vs. the reviewed reference results (tests/regression/)",
+    "e2e: the example pipeline through the command line, as a user runs it (tests/e2e/)",
+    "critical: covers a business-critical path (labels, run planning)",
 ]
 
 [tool.coverage.run]
 branch = true
+relative_files = true  # coverage files from the three CI test jobs combine
 source = ["src/phantom"]
 omit = [
     "src/phantom/legacy/*",
@@ -69,6 +72,9 @@ omit = [
 ]
 
 [tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
@@ -103,9 +109,9 @@ ignore = [
 known-first-party = ["phantom"]
 
 [tool.ruff.lint.flake8-bugbear]
-# phantom.runner.params.param() wraps dataclasses.field() for stage Params,
+# phantom.runner.parameters.param() wraps dataclasses.field() for stage Params,
 # so a call to it as a dataclass default is intended, not a shared default.
-extend-immutable-calls = ["phantom.runner.params.param"]
+extend-immutable-calls = ["phantom.runner.parameters.param"]
 
 [tool.mypy]
 ignore_missing_imports = true

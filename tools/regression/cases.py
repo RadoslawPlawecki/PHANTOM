@@ -1,8 +1,10 @@
 """
 Regression cases: each pipeline action as a run-file step with fixed
-parameters. The baselines were recorded from the former interactive menu,
+parameters. Most baselines were recorded from the former interactive menu,
 answered the same way, so a case passing means the stage reproduces the
-menu's output. The choices deliberately exercise non-default branches (a
+menu's output; cases whose results changed on purpose since (seeded
+randomness, version 1.0) were re-recorded, and classification.figures is
+new. The choices deliberately exercise non-default branches (a
 CheckV mask, count matrices, a non-default ratio mode, both validators, ...),
 so a dropped or mis-mapped option shows up as a changed output.
 """
@@ -159,6 +161,22 @@ CASES = [
         links=[f"{FEAT}/extracted"],
         copies=[META],
     ),
+    Case(
+        "classification.single.models",  # the algorithms added in 1.0
+        outputs=["results/single-modal"],
+        steps=[
+            {
+                "stage": "classification.single",
+                "version": V,
+                "modality": "host",
+                "vtool": VTOOL,
+                "model": ["logreg", "hgb", "xgb"],
+                "validators": ["loocv"],
+            }
+        ],
+        links=[f"{FEAT}/extracted"],
+        copies=[META],
+    ),
     *[
         Case(
             f"classification.multi.{fusion}",
@@ -179,6 +197,29 @@ CASES = [
         )
         for fusion in ("early", "late")
     ],
+    Case(
+        "classification.figures",
+        outputs=["results/figures"],
+        steps=[
+            {
+                "stage": "classification.single",
+                "version": V,
+                "modality": ["comp", "host"],
+                "vtool": VTOOL,
+                "model": "catboost",
+                "validators": ["loocv"],
+            },
+            {
+                "stage": "classification.figures",
+                "version": V,
+                "model": "catboost",
+                "validators": ["loocv"],
+                "kinds": ["single"],
+            },
+        ],
+        links=[f"{FEAT}/extracted"],
+        copies=[META],
+    ),
     Case(
         "classification.mds",
         outputs=["results/mds"],
@@ -203,7 +244,7 @@ CASES = [
                 "labeling": {"strategy": "threshold", "threshold": 34},
             }
         ],
-        links=[*TOOL_INPUTS, "data/checkv", "data/assemblies"],
+        links=[*TOOL_INPUTS, "data/checkv", "data/masks", "data/assemblies"],
         copies=[META],
         prepare=prepare_renaming_only_metadata,
         real={META: META},

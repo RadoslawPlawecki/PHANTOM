@@ -1,0 +1,118 @@
+# The pipeline on the synthetic example workspace -- from the tool outputs
+# onwards (the example has no raw reads and needs no tool databases):
+#   phantom example ../example                      # 12 synthetic samples
+#   phantom --config ../example/config.toml run runs/example.toml
+# Results land in ../example/results/. Takes a few minutes.
+
+[run]
+name = "example"
+description = "Synthetic example: raw folder -> genomes -> features 1.0 -> classifiers -> figures"
+
+# samples, genomes, quality
+
+[[steps]]
+stage = "preprocessing.samples"
+
+[[steps]]
+stage = "preprocessing.collect"
+
+[[steps]]
+stage = "preprocessing.masks"
+
+[[steps]]
+stage = "preprocessing.metadata"
+targets = ["checkv"]
+
+[[steps]]
+stage = "preprocessing.visualize"
+
+# features (version 1.0)
+
+[[steps]]
+stage = "features.import"
+version = "1.0"
+create = true
+sources = ["data/phabox2/cherry", "data/phabox2/phagcn", "data/phabox2/phavip"]
+
+[[steps]]
+stage = "features.merge"
+version = "1.0"
+id_columns = { "phavip/*" = "Genome", "*" = "Accession" }
+
+[[steps]]
+stage = "features.preprocess"
+version = "1.0"
+mask = "MQ_provMAGs.tsv"
+
+[[steps]]
+stage = "features.extract"
+version = "1.0"
+feature_col = { cherry = "ncbi_genus", phagcn = "genus" }
+binary = false
+min_patients = 2
+
+[[steps]]
+stage = "features.diversity"
+version = "1.0"
+
+[[steps]]
+stage = "features.summarize_functions"
+version = "1.0"
+
+# classification and figures
+
+[[steps]]
+stage = "classification.single"
+version = "1.0"
+modality = ["comp", "host", "func"]
+model = "catboost"
+validators = ["loocv", "rcv"]
+
+[[steps]]
+stage = "classification.multi"
+version = "1.0"
+fusion = "early"
+model = "catboost"
+validators = ["loocv"]
+
+[[steps]]
+stage = "classification.multi"
+version = "1.0"
+fusion = "late"
+model = "catboost"
+validators = ["loocv"]
+optimize_weights = true                  # tune the modality weights with Optuna
+n_trials = 5
+
+[[steps]]
+stage = "classification.mds"
+version = "1.0"
+
+[[steps]]
+stage = "classification.single"         # every other algorithm, on one modality
+version = "1.0"
+modality = "comp"
+vtool = "genomad"
+model = ["rf", "xgb", "logreg", "hgb"]
+validators = ["loocv", "rcv"]
+
+[[steps]]
+stage = "classification.figures"
+version = "1.0"
+model = ["catboost", "rf", "xgb", "logreg", "hgb"]
+
+# feature optimization (a tiny budget: a demonstration, not a result)
+
+[[steps]]
+stage = "features.optimize"
+version = "1.0"
+tool = "phagcn"
+vtool = "genomad"
+model = "catboost"
+mode = "all"                             # exploratory + permutation test + nested CV
+n_permutations = 2
+permutation_trials = 2
+outer_folds = 3
+outer_repeats = 1
+inner_trials = 2
+top_k_features = 3

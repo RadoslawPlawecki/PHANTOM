@@ -47,7 +47,7 @@ class MetadataPlots:
             plots.append("checkv_quality")
         if any(col in df.columns for col in _RUNTIME_COLS):
             plots.append("runtimes")
-        if "megahit_size_bytes" in df.columns and any(c in df.columns for c in _RUNTIME_COLS):
+        if "raw_size_bytes" in df.columns and any(c in df.columns for c in _RUNTIME_COLS):
             plots.append("size_vs_runtime")
         return plots
 
@@ -76,10 +76,10 @@ class MetadataPlots:
             cols = [f"checkv_{tag}_{tier}" for tier in ("total", "medium", "high")]
             if not all(c in df.columns for c in cols):
                 continue
-            sub = df[["id", *cols]].copy()
-            sub.columns = ["Sample", "Total", "Medium", "High"]
-            sub["Tool"] = name
-            frames.append(sub)
+            subset = df[["id", *cols]].copy()
+            subset.columns = ["Sample", "Total", "Medium", "High"]
+            subset["Tool"] = name
+            frames.append(subset)
         if not frames:
             return pd.DataFrame(columns=["Sample", "Total", "Medium", "High", "Tool"])
         return pd.concat(frames, ignore_index=True).dropna(subset=["Total"])
@@ -102,8 +102,8 @@ class MetadataPlots:
         fig, axes = plt.subplots(len(groups), 1, figsize=(14, 5 * len(groups)), squeeze=False)
         for ax, group in zip(axes[:, 0], groups, strict=True):
             subset = long_df[long_df["Sample"].isin(group)]
-            for tier, shade_idx, _ in _QUALITY_TIERS:
-                palette = {name: shades[shade_idx] for name, shades in _QUALITY_PALETTE.items()}
+            for tier, shade_index, _ in _QUALITY_TIERS:
+                palette = {name: shades[shade_index] for name, shades in _QUALITY_PALETTE.items()}
                 sns.barplot(
                     data=subset,
                     x="Sample",
@@ -190,15 +190,15 @@ class MetadataPlots:
         """Scatter of tool runtime against assembly size, one point per run."""
         use_latex()
         cols = [c for c in _RUNTIME_COLS if c in df.columns]
-        if "megahit_size_bytes" not in df.columns or not cols:
+        if "raw_size_bytes" not in df.columns or not cols:
             return
-        ordered = df.sort_values("megahit_size_bytes")
+        ordered = df.sort_values("raw_size_bytes")
         frames = []
         for col in cols:
-            sub = ordered[["id", "megahit_size_bytes", col]].copy()
-            sub.columns = ["Sample", "Size", "Runtime"]
-            sub["Tool"] = _RUNTIME_COLS[col]
-            frames.append(sub)
+            subset = ordered[["id", "raw_size_bytes", col]].copy()
+            subset.columns = ["Sample", "Size", "Runtime"]
+            subset["Tool"] = _RUNTIME_COLS[col]
+            frames.append(subset)
         plot_df = pd.concat(frames, ignore_index=True).dropna(subset=["Runtime"])
 
         fig, ax = plt.subplots(figsize=(14, 7))

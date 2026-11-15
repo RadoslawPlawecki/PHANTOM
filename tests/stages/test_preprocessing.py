@@ -4,70 +4,74 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-from tests.stages.conftest import jobs_for, run_stage, validate_stage
 
 import phantom.stages  # noqa: F401 -- registers the stages
 from phantom.runner.loader import RunFileError
+from tests.stages.conftest import jobs_for, run_stage, validate_stage
 
 
 def _meta_path(ws):
     return ws.data_root / "genomes" / "genome_metadata.csv"
 
 
-# --- collect -------------------------------------------------------------------
+# collect
 
 
-def test_collect_copies_genomes_and_records_renaming(ws, ctx):
+def test_collect_copies_genomes_and_records_renaming(ws, context):
     for sample in ("S1", "S2"):
         d = ws.data_root / "genomad" / f"{sample}_geN"
         d.mkdir(parents=True)
         (d / f"001_{sample}_x_virus.fna").write_text(">c\nACGT\n", encoding="utf-8")
     _meta_path(ws).unlink()  # collection creates the metadata from scratch
-    run_stage("preprocessing.collect", ctx)
-    assert sorted(p.name for p in (ws.data_root / "genomes" / "genomad").glob("*.fna")) == [
+    run_stage("preprocessing.collect", context)
+    assert sorted(
+        params.name for params in (ws.data_root / "genomes" / "genomad").glob("*.fna")
+    ) == [
         "S1_geN.fna",
         "S2_geN.fna",
     ]
-    meta = pd.read_csv(_meta_path(ws), sep=";")
-    assert meta.set_index("id")["geN_formatted_file"].to_dict() == {
+    metadata = pd.read_csv(_meta_path(ws), sep=";")
+    assert metadata.set_index("id")["geN_formatted_file"].to_dict() == {
         "S1": "S1_geN.fna",
         "S2": "S2_geN.fna",
     }
     # Collecting again replaces the renaming columns instead of failing.
-    run_stage("preprocessing.collect", ctx)
+    run_stage("preprocessing.collect", context)
 
 
-def test_collect_skips_folders_without_a_sample_id(ws, ctx):
+def test_collect_skips_folders_without_a_sample_id(ws, context):
     d = ws.data_root / "genomad" / "patientA_geN"
     d.mkdir(parents=True)
     (d / "patientA_virus.fna").write_text(">c\nACGT\n", encoding="utf-8")
     (ws.data_root / "genomad" / "S1_geN").mkdir()
     (ws.data_root / "genomad" / "S1_geN" / "S1_virus.fna").write_text(">c\nA\n", encoding="utf-8")
     _meta_path(ws).unlink()
-    run_stage("preprocessing.collect", ctx)
-    assert [p.name for p in (ws.data_root / "genomes" / "genomad").glob("*.fna")] == ["S1_geN.fna"]
+    run_stage("preprocessing.collect", context)
+    assert [params.name for params in (ws.data_root / "genomes" / "genomad").glob("*.fna")] == [
+        "S1_geN.fna"
+    ]
 
 
-# --- metadata --------------------------------------------------------------------
+# metadata
 
 
-def test_metadata_labels_by_threshold_and_refuses_to_relabel(ws, ctx):
+def test_metadata_labels_by_threshold_and_refuses_to_relabel(ws, context):
     pd.DataFrame({"id": ["S1", "S2", "S40"]}).to_csv(_meta_path(ws), sep=";", index=False)
     spec = {"strategy": "threshold", "threshold": 34}
-    run_stage("preprocessing.metadata", ctx, targets=["labeling"], labeling=spec)
-    meta = pd.read_csv(_meta_path(ws), sep=";")
-    assert meta.set_index("id")["label"].to_dict() == {"S1": 1, "S2": 1, "S40": 0}
+    run_stage("preprocessing.metadata", context, targets=["labeling"], labeling=spec)
+    metadata = pd.read_csv(_meta_path(ws), sep=";")
+    assert metadata.set_index("id")["label"].to_dict() == {"S1": 1, "S2": 1, "S40": 0}
     with pytest.raises(RunFileError, match="already has labels; set overwrite_labels"):
-        validate_stage("preprocessing.metadata", ctx, targets=["labeling"], labeling=spec)
+        validate_stage("preprocessing.metadata", context, targets=["labeling"], labeling=spec)
     run_stage(
         "preprocessing.metadata",
-        ctx,
+        context,
         targets=["labeling"],
         labeling={"strategy": "manual", "positives": ["S40"]},
         overwrite_labels=True,
     )
-    meta = pd.read_csv(_meta_path(ws), sep=";")
-    assert meta.set_index("id")["label"].to_dict() == {"S1": 0, "S2": 0, "S40": 1}
+    metadata = pd.read_csv(_meta_path(ws), sep=";")
+    assert metadata.set_index("id")["label"].to_dict() == {"S1": 0, "S2": 0, "S40": 1}
 
 
 @pytest.mark.parametrize(
@@ -84,23 +88,23 @@ def test_metadata_labels_by_threshold_and_refuses_to_relabel(ws, ctx):
         ({"labeling": {"strategy": "threshold", "threshold": 3, "x": 1}}, "unknown key 'x'"),
     ],
 )
-def test_metadata_validation(ctx, params, message):
+def test_metadata_validation(context, params, message):
     with pytest.raises(RunFileError, match=message):
-        jobs_for("preprocessing.metadata", ctx, **params)
+        jobs_for("preprocessing.metadata", context, **params)
 
 
-# --- masks -----------------------------------------------------------------------
+# masks
 
 
-def _quality(ws, tool, sample, abbr, rows):
-    d = ws.data_root / "checkv" / tool / f"{sample}_{abbr}_ChV"
+def _quality(ws, tool, sample, abbreviation, rows):
+    d = ws.data_root / "checkv" / tool / f"{sample}_{abbreviation}_ChV"
     d.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows, columns=["contig_id", "provirus", "completeness", "contamination"]).to_csv(
         d / "quality_summary.tsv", sep="\t", index=False
     )
 
 
-def test_masks_apply_configured_thresholds(ws, ctx):
+def test_masks_apply_configured_thresholds(ws, context):
     _quality(
         ws,
         "genomad",
@@ -113,7 +117,7 @@ def test_masks_apply_configured_thresholds(ws, ctx):
             ("k4", "No", 99.0, 20.0),
         ],
     )
-    run_stage("preprocessing.masks", ctx)
+    run_stage("preprocessing.masks", context)
     masks = ws.data_root / "masks" / "genomad"
 
     def ids(name):
@@ -122,24 +126,58 @@ def test_masks_apply_configured_thresholds(ws, ctx):
     assert ids("MQ_vMAGs.tsv") == ["geN|S1_k1", "geN|S1_k2"]
     assert ids("HQ_vMAGs.tsv") == ["geN|S1_k1"]
     assert ids("HQ_provMAGs.tsv") == ["geN|S1_k1", "geN|S1_k3"]
-    run_stage("preprocessing.masks", ctx, medium_completeness=70.0)
+    run_stage("preprocessing.masks", context, medium_completeness=70.0)
     assert ids("MQ_vMAGs.tsv") == ["geN|S1_k1"]
 
 
-def test_masks_validation(ctx):
+def test_masks_validation(context):
     with pytest.raises(RunFileError, match="medium_completeness <= high_completeness"):
-        jobs_for("preprocessing.masks", ctx, medium_completeness=80.0, high_completeness=60.0)
+        jobs_for("preprocessing.masks", context, medium_completeness=80.0, high_completeness=60.0)
     with pytest.raises(RunFileError, match=r"run tools\.checkv first"):
-        validate_stage("preprocessing.masks", ctx)
+        validate_stage("preprocessing.masks", context)
 
 
-def test_missing_labels_file_is_reported_up_front(ctx):
+def test_missing_labels_file_is_reported_up_front(context):
     # Validated with the parameters (before any step runs), not deferred
     # behind the steps that produce the metadata.
     with pytest.raises(RunFileError, match=r"labels file not found: .*labels\.csv"):
         jobs_for(
             "preprocessing.metadata",
-            ctx,
+            context,
             targets=["labeling"],
             labeling={"strategy": "csv", "path": "data/labels.csv"},
         )
+
+
+def test_checkv_counts_need_the_masks(ws, context):
+    pd.DataFrame({"id": ["S1"]}).to_csv(_meta_path(ws), sep=";", index=False)
+    with pytest.raises(RunFileError, match=r"run preprocessing\.masks first"):
+        validate_stage("preprocessing.metadata", context, targets=["checkv"])
+
+
+def test_every_metadata_plot_renders(tmp_path):
+    from phantom.analysis.genomes.metadata.plots import MetadataPlots
+
+    df = pd.DataFrame(
+        {
+            "id": ["S1", "S2"],
+            "vib_runtime": [10, 20],
+            "gen_runtime": [5, 8],
+            "raw_size_bytes": [1000, 3000],
+            "raw_size_mb": [0.001, 0.003],
+            **{
+                f"checkv_{t}_{q}": [4, 6]
+                for t in ("vib", "gen", "vs2")
+                for q in ("total", "medium", "high")
+            },
+        }
+    )
+    names = MetadataPlots.available_plots(df)
+    assert names == ["checkv_quality", "runtimes", "size_vs_runtime"]
+    written = MetadataPlots.render(df, names, tmp_path)
+    assert [params.name for params in written] == [
+        "checkv_quality_bar.pdf",
+        "runtime_box.pdf",
+        "size_vs_runtime.pdf",
+    ]
+    assert all(params.stat().st_size > 0 for params in written)

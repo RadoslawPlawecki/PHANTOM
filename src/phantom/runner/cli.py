@@ -7,6 +7,7 @@ run file, never from prompts.
     phantom validate RUNFILE          check a run file without running it
     phantom plan RUNFILE              show what would run and what is up to date
     phantom run RUNFILE               run it (skips up-to-date jobs)
+    phantom example DIR               write a synthetic example workspace to try it on
 
 ``validate``/``plan``/``run`` accept ``--set key=value`` (repeatable) to
 override a parameter without editing the file; ``plan``/``run`` also accept
@@ -20,6 +21,7 @@ import sys
 from pathlib import Path
 
 import phantom.stages  # noqa: F401 -- registers every stage
+from phantom.config.schema import ConfigError
 from phantom.runner.loader import RunFileError, apply_overrides, build_jobs, load_run_file
 from phantom.runner.planner import JobFailed, execute, format_plan, plan, resolve_from
 from phantom.runner.provenance import phantom_version
@@ -40,13 +42,18 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config", type=Path, default=None, help="config.toml to use (default: the repo's)"
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("stages", help="list stages, or describe one")
+    p = subparsers.add_parser("stages", help="list stages, or describe one")
     p.add_argument("stage", nargs="?")
     p.add_argument("--markdown", action="store_true", help="every stage as a Markdown page")
 
-    p = sub.add_parser("new", help="write a run-file template for a stage")
+    p = subparsers.add_parser(
+        "example", help="write a synthetic example workspace to try PHANTOM on"
+    )
+    p.add_argument("directory", type=Path)
+
+    p = subparsers.add_parser("new", help="write a run-file template for a stage")
     p.add_argument("stage")
     p.add_argument("-o", "--output", type=Path, help="write to FILE instead of stdout")
 
@@ -55,7 +62,7 @@ def _parser() -> argparse.ArgumentParser:
         ("plan", "show which jobs would run and which are up to date"),
         ("run", "run a run file"),
     ):
-        p = sub.add_parser(name, help=text)
+        p = subparsers.add_parser(name, help=text)
         p.add_argument("runfile", type=Path)
         p.add_argument(
             "--set",
@@ -76,12 +83,12 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _cmd_stages(args, ctx: RunContext) -> int:
+def _cmd_stages(args, context: RunContext) -> int:
     if args.markdown:
-        print(stages_markdown(list(REGISTRY.values()), ctx))
+        print(stages_markdown(list(REGISTRY.values()), context))
         return EXIT_OK
     if args.stage:
-        print(describe_stage(get_stage(args.stage), ctx))
+        print(describe_stage(get_stage(args.stage), context))
         return EXIT_OK
     width = max(len(n) for n in REGISTRY)
     for name in sorted(REGISTRY):
@@ -89,8 +96,8 @@ def _cmd_stages(args, ctx: RunContext) -> int:
     return EXIT_OK
 
 
-def _cmd_new(args, ctx: RunContext) -> int:
-    text = render_template(get_stage(args.stage), ctx)
+def _cmd_new(args, context: RunContext) -> int:
+    text = render_template(get_stage(args.stage), context)
     if args.output:
         if args.output.exists():
             print(f"[ERROR] {args.output} already exists; not overwriting.", file=sys.stderr)
@@ -103,29 +110,39 @@ def _cmd_new(args, ctx: RunContext) -> int:
     return EXIT_OK
 
 
-def _load(args, ctx: RunContext):
+def _cmd_example(args) -> int:
+    from phantom.example import write_example
+
+    config = write_example(args.directory)
+    runfile = Path(__file__).resolve().parents[3] / "runs" / "example.toml"
+    print(f"Wrote an example workspace (12 synthetic samples) to {args.directory}")
+    print(f"Run it:  phantom --config {config} run {runfile}")
+    return EXIT_OK
+
+
+def _load(args, context: RunContext):
     run = apply_overrides(load_run_file(args.runfile), args.overrides)
-    return run, build_jobs(run, ctx)
+    return run, build_jobs(run, context)
 
 
-def _cmd_validate(args, ctx: RunContext) -> int:
-    _, jobs = _load(args, ctx)
+def _cmd_validate(args, context: RunContext) -> int:
+    _, jobs = _load(args, context)
     # Plan as if everything ran, so the input data of every job that does not
     # depend on an earlier one is checked too (dependent jobs: when they run).
-    planned = plan(jobs, ctx, StampStore(ctx.section_path("stamps")), force=True)
-    deferred = sum(pj.deferred for pj in planned)
+    planned = plan(jobs, context, StampStore(context.section_path("stamps")), force=True)
+    deferred = sum(planned_job.deferred for planned_job in planned)
     steps = len({j.step.index for j in jobs})
     note = f"; {deferred} read inputs an earlier job produces" if deferred else ""
     print(f"[OK] {args.runfile}: {len(jobs)} job(s) in {steps} step(s){note}.")
     return EXIT_OK
 
 
-def _plan(args, ctx: RunContext):
-    run, jobs = _load(args, ctx)
-    store = StampStore(ctx.section_path("stamps"))
+def _plan(args, context: RunContext):
+    run, jobs = _load(args, context)
+    store = StampStore(context.section_path("stamps"))
     planned = plan(
         jobs,
-        ctx,
+        context,
         store,
         force=args.force,
         only=args.only,
@@ -134,17 +151,17 @@ def _plan(args, ctx: RunContext):
     return run, store, planned
 
 
-def _cmd_plan(args, ctx: RunContext) -> int:
-    _, _, planned = _plan(args, ctx)
+def _cmd_plan(args, context: RunContext) -> int:
+    _, _, planned = _plan(args, context)
     print(format_plan(planned))
     return EXIT_OK
 
 
-def _cmd_run(args, ctx: RunContext) -> int:
-    run, store, planned = _plan(args, ctx)
+def _cmd_run(args, context: RunContext) -> int:
+    run, store, planned = _plan(args, context)
     print(format_plan(planned))
     try:
-        produced = execute(planned, ctx, store, run)
+        produced = execute(planned, context, store, run)
     except JobFailed as e:
         print(f"\n[FAILED] {e}", file=sys.stderr)
         print(
@@ -168,14 +185,21 @@ COMMANDS = {
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        ctx = RunContext.load(args.config)
-        return COMMANDS[args.command](args, ctx)
+        if args.command == "example":
+            return _cmd_example(args)
+        context = RunContext.load(args.config)
+        return COMMANDS[args.command](args, context)
+    except ConfigError as e:
+        print("[INVALID] configuration:", file=sys.stderr)
+        for message in e.errors:
+            print(f"  - {message}", file=sys.stderr)
+        return EXIT_INVALID
     except RunFileError as e:
         print(f"[INVALID] {getattr(args, 'runfile', '')}:", file=sys.stderr)
-        for msg in e.errors:
-            print(f"  - {msg}", file=sys.stderr)
+        for message in e.errors:
+            print(f"  - {message}", file=sys.stderr)
         return EXIT_INVALID
-    except (KeyError, ValueError) as e:
+    except (KeyError, ValueError, FileExistsError) as e:
         print(f"[ERROR] {e.args[0] if e.args else e}", file=sys.stderr)
         return EXIT_INVALID
 

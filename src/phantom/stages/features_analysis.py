@@ -1,7 +1,7 @@
 """
 Analyses of a feature version (not part of the feature-building chain).
 
-``features.diversity``            healthy-vs-allergy taxonomic/host diversity
+``features.diversity``            taxonomic/host diversity, cases vs. controls
 ``features.summarize_functions``  per-category FASTA + genus/host table of ORFs
 """
 
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from phantom.runner.params import param
+from phantom.runner.parameters import param
 from phantom.runner.stage import RunContext, Stage, register
 from phantom.stages._common import check_metadata, check_version, metadata_path, output_dir
 
@@ -23,11 +23,11 @@ DIVERSITY_TOOLS = ("phagcn", "cherry")
 SUMMARY_TOOLS = ("phavip", "phagcn", "cherry")
 
 
-def _preprocessed(ctx: RunContext, version: str) -> Path:
-    return ctx.stage_dir(version, "preprocessed")
+def _preprocessed(context: RunContext, version: str) -> Path:
+    return context.stage_dir(version, "preprocessed")
 
 
-# --- features.diversity -------------------------------------------------------
+# features.diversity
 
 
 @dataclass(frozen=True)
@@ -46,43 +46,43 @@ class DiversityParams:
 @register
 class Diversity(Stage):
     name = "features.diversity"
-    summary = "Phage-genus and bacterial-host diversity, healthy vs. allergy"
+    summary = "Phage-genus and bacterial-host diversity, cases vs. controls"
     Params = DiversityParams
 
-    def choices(self, ctx: RunContext) -> dict[str, list]:
-        return {"version": ctx.feature_versions()}
+    def choices(self, context: RunContext) -> dict[str, list]:
+        return {"version": context.feature_versions()}
 
-    def validate(self, p: DiversityParams, ctx: RunContext) -> list[str]:
-        return check_version(p.version, ctx)
+    def validate(self, params: DiversityParams, context: RunContext) -> list[str]:
+        return check_version(params.version, context)
 
-    def check_inputs(self, p: DiversityParams, ctx: RunContext) -> list[str]:
-        pre = _preprocessed(ctx, p.version)
+    def check_inputs(self, params: DiversityParams, context: RunContext) -> list[str]:
+        pre = _preprocessed(context, params.version)
         errors = []
         if not any((pre / t).is_dir() for t in DIVERSITY_TOOLS):
             errors.append(f"no preprocessed phagcn/cherry data under {pre}")
-        return errors + check_metadata(ctx)
+        return errors + check_metadata(context)
 
-    def label(self, p: DiversityParams) -> str:
-        return p.ratio_mode
+    def label(self, params: DiversityParams) -> str:
+        return params.ratio_mode
 
-    def inputs(self, p: DiversityParams, ctx: RunContext) -> list[Path]:
-        pre = _preprocessed(ctx, p.version)
-        return [*(pre / t for t in DIVERSITY_TOOLS), metadata_path(ctx)]
+    def inputs(self, params: DiversityParams, context: RunContext) -> list[Path]:
+        pre = _preprocessed(context, params.version)
+        return [*(pre / t for t in DIVERSITY_TOOLS), metadata_path(context)]
 
-    def writes(self, p: DiversityParams, ctx: RunContext) -> list[Path]:
-        return [output_dir(p.out_dir, ctx, DIVERSITY_DIR, p.version)]
+    def writes(self, params: DiversityParams, context: RunContext) -> list[Path]:
+        return [output_dir(params.out_dir, context, DIVERSITY_DIR, params.version)]
 
-    def run(self, p: DiversityParams, ctx: RunContext) -> list[Path]:
+    def run(self, params: DiversityParams, context: RunContext) -> list[Path]:
         from phantom.analysis.features.diversity import DiversityAnalyzer
 
-        out_dir = output_dir(p.out_dir, ctx, DIVERSITY_DIR, p.version)
-        DiversityAnalyzer(version=p.version, config_mgr=ctx.config_mgr).run(
-            out_dir, ratio_mode=p.ratio_mode
-        )
+        out_dir = output_dir(params.out_dir, context, DIVERSITY_DIR, params.version)
+        DiversityAnalyzer(
+            version=params.version, feature_version_manager=context.feature_version_manager
+        ).run(out_dir, ratio_mode=params.ratio_mode)
         return [out_dir]
 
 
-# --- features.summarize_functions ---------------------------------------------
+# features.summarize_functions
 
 
 @dataclass(frozen=True)
@@ -96,34 +96,38 @@ class SummarizeFunctions(Stage):
     summary = "Group PHANOTATE ORFs by phavip function, with genus (phagcn) and host (cherry)"
     Params = SummarizeParams
 
-    def choices(self, ctx: RunContext) -> dict[str, list]:
-        return {"version": ctx.feature_versions()}
+    def choices(self, context: RunContext) -> dict[str, list]:
+        return {"version": context.feature_versions()}
 
-    def validate(self, p: SummarizeParams, ctx: RunContext) -> list[str]:
-        errors = check_version(p.version, ctx)
+    def validate(self, params: SummarizeParams, context: RunContext) -> list[str]:
+        errors = check_version(params.version, context)
         for section in ("phanotate", "functions"):
-            if not ctx.config.get(section, {}).get("path"):
+            if not context.config.get(section, {}).get("path"):
                 errors.append(f"config.toml is missing [{section}].path")
         return errors
 
-    def check_inputs(self, p: SummarizeParams, ctx: RunContext) -> list[str]:
+    def check_inputs(self, params: SummarizeParams, context: RunContext) -> list[str]:
         errors = []
-        if not (_preprocessed(ctx, p.version) / "phavip").is_dir():
-            errors.append(f"no preprocessed phavip data under {_preprocessed(ctx, p.version)}")
-        if not ctx.section_path("phanotate").is_dir():
-            errors.append(f"PHANOTATE ORF directory not found: {ctx.section_path('phanotate')}")
+        if not (_preprocessed(context, params.version) / "phavip").is_dir():
+            errors.append(
+                f"no preprocessed phavip data under {_preprocessed(context, params.version)}"
+            )
+        if not context.section_path("phanotate").is_dir():
+            errors.append(f"PHANOTATE ORF directory not found: {context.section_path('phanotate')}")
         return errors
 
-    def inputs(self, p: SummarizeParams, ctx: RunContext) -> list[Path]:
-        pre = _preprocessed(ctx, p.version)
-        return [*(pre / t for t in SUMMARY_TOOLS), ctx.section_path("phanotate")]
+    def inputs(self, params: SummarizeParams, context: RunContext) -> list[Path]:
+        pre = _preprocessed(context, params.version)
+        return [*(pre / t for t in SUMMARY_TOOLS), context.section_path("phanotate")]
 
-    def writes(self, p: SummarizeParams, ctx: RunContext) -> list[Path]:
-        return [ctx.section_path("functions") / p.version]
+    def writes(self, params: SummarizeParams, context: RunContext) -> list[Path]:
+        return [context.section_path("functions") / params.version]
 
-    def run(self, p: SummarizeParams, ctx: RunContext) -> list[Path]:
-        from phantom.analysis.features.functions import FunctionSummarizer
+    def run(self, params: SummarizeParams, context: RunContext) -> list[Path]:
+        from phantom.analysis.features.function_summary import FunctionSummarizer
 
-        summarizer = FunctionSummarizer(p.version, ctx.config, ctx.config_mgr)
+        summarizer = FunctionSummarizer(
+            params.version, context.config, context.feature_version_manager
+        )
         summarizer.run()
         return [summarizer.out_root]

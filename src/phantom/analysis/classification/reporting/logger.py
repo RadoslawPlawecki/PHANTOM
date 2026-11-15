@@ -11,12 +11,13 @@ from tqdm import tqdm
 
 
 class Logger:
+    @staticmethod
     def setup_logger(name="tool", log_dir="logs", log_filename="execution.log"):
         os.makedirs(log_dir, exist_ok=True)
         log_path = os.path.join(log_dir, log_filename)
         logger = logging.getLogger(name)
         logger.setLevel(logging.INFO)
-        logger.handlers.clear()
+        Logger.close(logger)  # the previous run's file handler: close, not just drop
         formatter = logging.Formatter(
             "[%(asctime)s] [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S"
         )
@@ -29,6 +30,14 @@ class Logger:
         logger.info(f"Log File Initialized: {log_path}")
         return logger
 
-    def log_tqdm(logger, msg):
-        tqdm.write(msg)
-        logger.info(msg)
+    @staticmethod
+    def close(logger):
+        """Closes and removes every handler (their log files are complete)."""
+        for handler in list(logger.handlers):
+            handler.close()
+            logger.removeHandler(handler)
+
+    @staticmethod
+    def log_tqdm(logger, message):
+        tqdm.write(message)
+        logger.info(message)

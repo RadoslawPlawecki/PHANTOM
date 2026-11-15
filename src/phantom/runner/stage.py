@@ -24,21 +24,33 @@ from phantom.config.loader import ConfigLoader
 class RunContext:
     config: dict
     config_path: Path
-    config_mgr: FeatureConfigManager
+    feature_version_manager: FeatureConfigManager
     # Feature versions an earlier step of the current run file will create.
     planned_versions: set[str] = field(default_factory=set)
 
     @classmethod
     def load(cls, config_path: Path | None = None) -> RunContext:
-        loader = ConfigLoader(config_path)
-        config = loader.load()
+        loader = ConfigLoader.activate(config_path)
+        config = loader.config or {}
         return cls(
-            config=config, config_path=loader.path, config_mgr=FeatureConfigManager(loader.path)
+            config=config,
+            config_path=loader.path,
+            feature_version_manager=FeatureConfigManager(loader.path),
         )
 
     def reload(self) -> None:
         """Re-read config.toml after a stage changed it (e.g. a new feature version)."""
         self.config = ConfigLoader(self.config_path).load()
+
+    def ran_before(self, stage: str, params) -> bool:
+        """Whether a job of ``stage`` with exactly these parameters has a stamp,
+        i.e. finished in an earlier run (its outputs may since be stale)."""
+        from phantom.runner.stamps import StampStore, params_digest
+
+        if not self.config.get("stamps", {}).get("path"):
+            return False
+        store = StampStore(self.section_path("stamps"))
+        return store.read(stage, params_digest(params)) is not None
 
     def section_path(self, section: str) -> Path:
         """
@@ -54,15 +66,15 @@ class RunContext:
         return path if path.is_absolute() else ConfigLoader.resolve_data_path(path)
 
     @property
-    def vtools(self) -> list[str]:
-        return list(self.config.get("tools", {}))
+    def virus_identification_tools(self) -> list[str]:
+        return list(ConfigLoader.virus_identification_tools(self.config))
 
     @property
     def modalities(self) -> dict[str, dict]:
         return dict(self.config.get("modalities", {}))
 
     def feature_versions(self) -> list[str]:
-        return self.config_mgr.get_existing_versions()
+        return self.feature_version_manager.get_existing_versions()
 
     def version_known(self, version: str) -> bool:
         return version in self.feature_versions() or version in self.planned_versions
@@ -71,8 +83,8 @@ class RunContext:
         """A feature version's stage directory -- from config.toml, or, for a
         version an earlier step creates, where it will be created."""
         if version in self.planned_versions and version not in self.feature_versions():
-            return self.config_mgr.new_version_stage_dir(version, stage)
-        return self.config_mgr.get_stage_dir(version, stage)
+            return self.feature_version_manager.new_version_stage_dir(version, stage)
+        return self.feature_version_manager.get_stage_dir(version, stage)
 
 
 class Stage(ABC):
@@ -80,24 +92,29 @@ class Stage(ABC):
     summary: ClassVar[str]
     Params: ClassVar[type]
 
-    def defaults(self, ctx: RunContext) -> dict[str, Any]:
+    def defaults(self, context: RunContext) -> dict[str, Any]:
         """Defaults that depend on config.toml (e.g. "all vtools")."""
         return {}
 
-    def choices(self, ctx: RunContext) -> dict[str, list[Any]]:
+    def choices(self, context: RunContext) -> dict[str, list[Any]]:
         """Values available in config/data per field, shown in templates."""
         return {}
 
-    def validate(self, p: Any, ctx: RunContext) -> list[str]:
+    def resolve(self, params: Any, context: RunContext) -> Any:
+        """Canonical parameters (e.g. a tool's full name -> its abbreviation),
+        so equivalent spellings are one job with one stamp. Default: as given."""
+        return params
+
+    def validate(self, params: Any, context: RunContext) -> list[str]:
         """Parameter/config checks (version declared, names valid) -- always
         run before anything executes."""
         return []
 
-    def announces(self, p: Any) -> list[str]:
+    def announces(self, params: Any) -> list[str]:
         """Feature versions this job creates (later steps may then use them)."""
         return []
 
-    def check_inputs(self, p: Any, ctx: RunContext) -> list[str]:
+    def check_inputs(self, params: Any, context: RunContext) -> list[str]:
         """
         Checks on the input *data* (files exist, columns present). Run before
         anything executes for jobs whose inputs already exist, and right
@@ -107,7 +124,7 @@ class Stage(ABC):
         return []
 
     @abstractmethod
-    def inputs(self, p: Any, ctx: RunContext) -> list[Path]:
+    def inputs(self, params: Any, context: RunContext) -> list[Path]:
         """
         Files/directories whose content determines this job's result. Must
         be computable before the inputs exist (prefer stable directories over
@@ -115,16 +132,16 @@ class Stage(ABC):
         """
 
     @abstractmethod
-    def writes(self, p: Any, ctx: RunContext) -> list[Path]:
+    def writes(self, params: Any, context: RunContext) -> list[Path]:
         """Directories this job writes into (used to propagate staleness)."""
 
     @abstractmethod
-    def run(self, p: Any, ctx: RunContext) -> list[Path] | None:
+    def run(self, params: Any, context: RunContext) -> list[Path] | None:
         """Does the work; returns the output paths actually produced, or None
         when nothing was produced on purpose (a dry run) -- then no stamp is
         written, so the job still counts as not done."""
 
-    def label(self, p: Any) -> str:
+    def label(self, params: Any) -> str:
         """Short one-line description of a job, for ``phantom plan``."""
         return ""
 

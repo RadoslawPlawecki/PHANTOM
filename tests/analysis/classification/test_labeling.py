@@ -136,9 +136,9 @@ class TestMetadataOverwrite:
         mm.add_metadata_columns(
             pd.DataFrame({"id": ["S1", "S2"], "label": [0, 1]}), overwrite={"label"}
         )
-        out = mm.load()
-        assert out["label"].tolist() == [0, 1]
-        assert out["x"].tolist() == [5, 6]
+        output = mm.load()
+        assert output["label"].tolist() == [0, 1]
+        assert output["x"].tolist() == [5, 6]
 
     def test_overwrite_does_not_unlock_other_columns(self, tmp_path):
         mm = MetadataTable(tmp_path / "m.csv")
@@ -156,8 +156,8 @@ class TestExternalCSVLabeler:
 
         csv = tmp_path / "ext.csv"
         pd.DataFrame(external_rows).to_csv(csv, index=False)
-        meta = pd.DataFrame({"id": ["S1", "S2"], "geN_original_file": ["a.fna", "b.fna"]})
-        return ExternalCSVLabeler(csv, **kwargs).assign_labels(meta)
+        metadata = pd.DataFrame({"id": ["S1", "S2"], "geN_original_file": ["a.fna", "b.fna"]})
+        return ExternalCSVLabeler(csv, **kwargs).assign_labels(metadata)
 
     def test_assigns_labels_from_csv(self, tmp_path):
         rows = [{"id": "S1", "label": 1}, {"id": "S2", "label": 0}]
@@ -197,5 +197,5 @@ class TestExternalCSVLabeler:
 
         csv = tmp_path / "ext.csv"
         csv.write_text("id;label\nS1;1\nS2;0\n", encoding="utf-8")
-        meta = pd.DataFrame({"id": ["S1", "S2"]})
-        assert ExternalCSVLabeler(csv).assign_labels(meta) == {"S1": 1, "S2": 0}
+        metadata = pd.DataFrame({"id": ["S1", "S2"]})
+        assert ExternalCSVLabeler(csv).assign_labels(metadata) == {"S1": 1, "S2": 0}

@@ -6,7 +6,8 @@ preprocessing applies (see load_masked). The CheckV mask is the one
 thing every tool gets uniformly -- applied right after loading, before any
 tool-specific preprocessing or search runs.
 
-Building blocks reused by the three strategies in strategies/: loading a
+Building blocks reused by the three evaluations (exploratory.py, nested_cv.py,
+permutation_test.py): loading a
 tool's raw-merged file, applying a candidate config (apply_<tool>_config),
 and running an Optuna study over its search space (search_<tool>). Not a
 strategy itself -- see optimizer.py for the orchestrator.
@@ -20,12 +21,11 @@ from pathlib import Path
 import optuna
 import pandas as pd
 
-from phantom.analysis.classification.ml.models import (
-    get_catboost_model,
-    get_rf_model,
-    get_xgb_model,
+from phantom.analysis.classification.machine_learning.cross_validation import (
+    LeaveOneOutCrossValidator,
+    RepeatedCrossValidator,
 )
-from phantom.analysis.classification.ml.validators import LOOCVValidator, RepeatedCVValidator
+from phantom.analysis.classification.machine_learning.models import MODELS
 from phantom.analysis.features.optimization.scoring import FeatureConfigScorer
 from phantom.analysis.features.phabox2.cherry import CherryFeaturePipeline
 from phantom.analysis.features.phabox2.loading import apply_mask, load_file
@@ -33,15 +33,11 @@ from phantom.analysis.features.phabox2.matrix import build_taxonomy_matrix
 from phantom.analysis.features.phabox2.phagcn import PhagcnFeaturePipeline
 from phantom.analysis.features.phabox2.phavip import PhavipFeaturePipeline
 
-MODEL_FACTORIES = {
-    "catboost": get_catboost_model,
-    "rf": get_rf_model,
-    "xgb": get_xgb_model,
-}
+MODEL_FACTORIES = MODELS
 
 VALIDATORS = {
-    "loocv": LOOCVValidator,
-    "rcv": RepeatedCVValidator,
+    "loocv": LeaveOneOutCrossValidator,
+    "rcv": RepeatedCrossValidator,
 }
 
 CHERRY_SEARCH_SPACE: dict[str, Sequence[str | float | int | bool | None]] = {
@@ -79,6 +75,7 @@ class RunConfig:
     validator: str = "loocv"
     metric: str = "mcc"
     smote: bool = False
+    seed: int = 42  # models, CV splits, the Optuna sampler, label shuffles
 
 
 def load_masked(tool: str, path: Path, mask_path: Path | None) -> pd.DataFrame:
@@ -114,15 +111,21 @@ def run_study(
     file_path: Path | None = None,
     sampler=None,
     verbose: bool = True,
+    seed: int = 42,
 ):
-    model = MODEL_FACTORIES[model_name](use_smote=use_smote)
-    validator = VALIDATORS[validator_name](verbose=False)
+    model = MODEL_FACTORIES[model_name](use_smote=use_smote, seed=seed)
+    if validator_name == "rcv":
+        validator = RepeatedCrossValidator(random_state=seed, verbose=False)
+    else:
+        validator = VALIDATORS[validator_name](verbose=False)
     optimizer = FeatureConfigScorer(model=model, validator=validator, target_metric=target_metric)
 
     def wrapped_objective(trial):
         return objective_callable(trial, optimizer=optimizer)
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
+    if sampler is None:
+        sampler = optuna.samplers.TPESampler(seed=seed)
     study = optuna.create_study(study_name=study_name, direction="maximize", sampler=sampler)
     if verbose:
         print(f"\n[INFO] Starting Optuna optimization for {study_name.upper()}...")
@@ -191,11 +194,12 @@ def search_phagcn(
     y_override=None,
     file_path: Path | None = None,
     verbose: bool = True,
+    seed: int = 42,
 ) -> optuna.Study:
     bound_objective = partial(
         phagcn_objective, preprocessed_df=preprocessed_df, y_override=y_override
     )
-    grid_sampler = optuna.samplers.GridSampler(PHAGCN_SEARCH_SPACE)
+    grid_sampler = optuna.samplers.GridSampler(PHAGCN_SEARCH_SPACE, seed=seed)
     return run_study(
         study_name="phagcn_feature_optimization",
         objective_callable=bound_objective,
@@ -207,6 +211,7 @@ def search_phagcn(
         file_path=file_path,
         sampler=grid_sampler,
         verbose=verbose,
+        seed=seed,
     )
 
 
@@ -251,11 +256,12 @@ def search_cherry(
     y_override=None,
     file_path: Path | None = None,
     verbose: bool = True,
+    seed: int = 42,
 ) -> optuna.Study:
     bound_objective = partial(
         cherry_objective, preprocessed_df=preprocessed_df, y_override=y_override
     )
-    grid_sampler = optuna.samplers.GridSampler(CHERRY_SEARCH_SPACE)
+    grid_sampler = optuna.samplers.GridSampler(CHERRY_SEARCH_SPACE, seed=seed)
     return run_study(
         study_name="cherry_feature_optimization",
         objective_callable=bound_objective,
@@ -267,6 +273,7 @@ def search_cherry(
         file_path=file_path,
         sampler=grid_sampler,
         verbose=verbose,
+        seed=seed,
     )
 
 
@@ -304,6 +311,7 @@ def search_phavip(
     y_override=None,
     file_path: Path | None = None,
     verbose: bool = True,
+    seed: int = 42,
 ) -> optuna.Study:
     bound_objective = partial(phavip_objective, df=df, y_override=y_override)
     return run_study(
@@ -316,6 +324,7 @@ def search_phavip(
         use_smote=use_smote,
         file_path=file_path,
         verbose=verbose,
+        seed=seed,
     )
 
 

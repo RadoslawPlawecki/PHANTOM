@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-from tests.stages.conftest import VERSION, jobs_for, run_stage, validate_stage
 
 import phantom.stages  # noqa: F401 -- registers the stages
 from phantom.runner.loader import RunFileError
+from tests.stages.conftest import VERSION, jobs_for, run_stage, validate_stage
 
-# --- features.optimize --------------------------------------------------------------
+# features.optimize
 
 
 @pytest.fixture
@@ -43,10 +43,16 @@ def fake_optimize(ws, monkeypatch):
     ],
 )
 def test_optimize_records_only_the_knobs_its_mode_uses(
-    ws, ctx, fake_optimize, mode, nested, permutation
+    ws, context, fake_optimize, mode, nested, permutation
 ):
     run_stage(
-        "features.optimize", ctx, version=VERSION, tool="phagcn", vtool="geN", mode=mode, model="rf"
+        "features.optimize",
+        context,
+        version=VERSION,
+        tool="phagcn",
+        vtool="geN",
+        mode=mode,
+        model="rf",
     )
     (call,) = fake_optimize
     assert (call["outer_folds"] is not None) is nested
@@ -57,10 +63,31 @@ def test_optimize_records_only_the_knobs_its_mode_uses(
     assert call["out"] == ws.root / "results" / "optimization" / VERSION / "phagcn" / "geN"
 
 
-def test_optimize_validation(ws, ctx, fake_optimize):
+def test_optimize_validation(ws, context, fake_optimize):
     with pytest.raises(RunFileError, match="outer_folds must be >= 2"):
         jobs_for(
-            "features.optimize", ctx, version=VERSION, tool="phagcn", vtool="geN", outer_folds=1
+            "features.optimize", context, version=VERSION, tool="phagcn", vtool="geN", outer_folds=1
         )
     with pytest.raises(RunFileError, match=r"no VIB_\*\.csv merged file"):
-        validate_stage("features.optimize", ctx, version=VERSION, tool="phagcn", vtool="VIB")
+        validate_stage("features.optimize", context, version=VERSION, tool="phagcn", vtool="VIB")
+
+
+@pytest.mark.parametrize("mode", ["nested", "all"])
+def test_a_model_without_importances_cannot_run_the_ablation(context, mode):
+    with pytest.raises(RunFileError, match="no built-in feature importances"):
+        jobs_for(
+            "features.optimize",
+            context,
+            version=VERSION,
+            tool="phagcn",
+            vtool="geN",
+            model="hgb",
+            mode=mode,
+        )
+
+
+def test_every_model_can_run_the_exploratory_search(context):
+    for model in ("rf", "xgb", "catboost", "logreg", "hgb"):
+        jobs_for(
+            "features.optimize", context, version=VERSION, tool="phagcn", vtool="geN", model=model
+        )

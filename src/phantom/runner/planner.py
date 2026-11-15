@@ -66,7 +66,7 @@ def _overlaps(a: Path, b: Path) -> bool:
 
 def plan(
     jobs: list[Job],
-    ctx: RunContext,
+    context: RunContext,
     store: StampStore,
     *,
     force: bool = False,
@@ -82,7 +82,7 @@ def plan(
     planned: list[PlannedJob] = []
     will_write: list[tuple[int, Path]] = []
     for number, job in enumerate(jobs, start=1):
-        inputs = job.stage.inputs(job.params, ctx)
+        inputs = job.stage.inputs(job.params, context)
         if not _selected(job, only, start):
             planned.append(PlannedJob(number, job, DESELECTED, "not selected", inputs))
             continue
@@ -95,7 +95,7 @@ def plan(
             if status.state == DONE and upstream is not None:
                 status = Status(RUN, f"input rewritten by job {upstream}")
         if status.state == RUN:
-            will_write += [(number, w) for w in job.stage.writes(job.params, ctx)]
+            will_write += [(number, w) for w in job.stage.writes(job.params, context)]
         planned.append(
             PlannedJob(
                 number,
@@ -108,81 +108,82 @@ def plan(
         )
     if check_inputs:
         errors = [
-            f"job {pj.number} (step {pj.job.step.index}, {pj.job.stage.name}"
-            f"{' -- ' + pj.job.label if pj.job.label else ''}): {msg}"
-            for pj in planned
-            if pj.state == RUN and not pj.deferred
-            for msg in dict.fromkeys(_check(pj.job, ctx))
+            f"job {planned_job.number} (step {planned_job.job.step.index}, {planned_job.job.stage.name}"
+            f"{' -- ' + planned_job.job.label if planned_job.job.label else ''}): {message}"
+            for planned_job in planned
+            if planned_job.state == RUN and not planned_job.deferred
+            for message in dict.fromkeys(_check(planned_job.job, context))
         ]
         if errors:
             raise RunFileError(errors)
     return planned
 
 
-def _check(job: Job, ctx: RunContext) -> list[str]:
+def _check(job: Job, context: RunContext) -> list[str]:
     try:
-        return job.stage.check_inputs(job.params, ctx)
+        return job.stage.check_inputs(job.params, context)
     except (KeyError, ValueError, FileNotFoundError) as e:
         return [str(e.args[0]) if e.args else str(e)]
 
 
 def format_plan(planned: list[PlannedJob]) -> str:
     rows = [("#", "step", "stage", "job", "state")]
-    for pj in planned:
-        marker = {RUN: "RUN ", DONE: "skip", DESELECTED: "    "}[pj.state]
+    for planned_job in planned:
+        marker = {RUN: "RUN ", DONE: "skip", DESELECTED: "    "}[planned_job.state]
         rows.append(
             (
-                str(pj.number),
-                str(pj.job.step.index),
-                pj.job.stage.name,
-                pj.job.label,
-                f"{marker} {pj.reason}" + (" (inputs from an earlier job)" if pj.deferred else ""),
+                str(planned_job.number),
+                str(planned_job.job.step.index),
+                planned_job.job.stage.name,
+                planned_job.job.label,
+                f"{marker} {planned_job.reason}"
+                + (" (inputs from an earlier job)" if planned_job.deferred else ""),
             )
         )
     widths = [max(len(r[i]) for r in rows) for i in range(4)]
     lines = ["  ".join(r[i].ljust(widths[i]) for i in range(4)) + "  " + r[4] for r in rows]
-    n_run = sum(pj.state == RUN for pj in planned)
-    n_done = sum(pj.state == DONE for pj in planned)
+    n_run = sum(planned_job.state == RUN for planned_job in planned)
+    n_done = sum(planned_job.state == DONE for planned_job in planned)
     lines.append(f"\n{n_run} job(s) to run, {n_done} up to date.")
     return "\n".join(lines)
 
 
 def execute(
     planned: list[PlannedJob],
-    ctx: RunContext,
+    context: RunContext,
     store: StampStore,
     run: RunFile,
 ) -> list[Path]:
     """Runs every RUN job in order; raises on the first failure."""
     produced: list[Path] = []
-    to_run = [pj for pj in planned if pj.state == RUN]
-    for i, pj in enumerate(to_run, start=1):
-        job = pj.job
+    to_run = [planned_job for planned_job in planned if planned_job.state == RUN]
+    for i, planned_job in enumerate(to_run, start=1):
+        job = planned_job.job
         header = f"[{i}/{len(to_run)}] {job.stage.name}"
         print(f"\n=== {header}{' -- ' + job.label if job.label else ''} ===", flush=True)
-        if pj.deferred:
-            problems = _check(job, ctx)
+        if planned_job.deferred:
+            problems = _check(job, context)
             if problems:
-                raise JobFailed(pj, "; ".join(dict.fromkeys(problems)))
+                raise JobFailed(planned_job, "; ".join(dict.fromkeys(problems)))
         started = datetime.now()
         try:
-            outputs = job.stage.run(job.params, ctx)
+            outputs = job.stage.run(job.params, context)
         except Exception as e:
             traceback.print_exc()
-            raise JobFailed(pj, e) from e
+            raise JobFailed(planned_job, e) from e
         if outputs is None:  # deliberately produced nothing (dry run): no stamp
             print("[INFO] nothing written (dry run); the job stays pending")
             continue
         # Recomputed: inputs produced by an earlier job of this run did not
         # exist when the plan was made.
-        inputs = job.stage.inputs(job.params, ctx)
-        for out in outputs:
-            if out.is_dir():
+        inputs = job.stage.inputs(job.params, context)
+        for output in outputs:
+            if output.is_dir():
                 write_run_toml(
-                    out,
+                    output,
                     stage=job.stage.name,
                     params=job.params,
-                    run_meta=run.meta,
+                    run_metadata=run.metadata,
                     source=run.path,
                     inputs=inputs,
                 )
@@ -195,8 +196,8 @@ def execute(
             extra={"phantom_version": phantom_version(), **git_state()},
         )
         produced += outputs
-        for out in outputs:
-            print(f"[DONE] {out}")
+        for output in outputs:
+            print(f"[DONE] {output}")
     return produced
 
 

@@ -1,14 +1,14 @@
 # Annotate the collected genomes: CheckV quality, PHANOTATE ORFs, then
 # PhaBOX2 host / taxonomy / gene function. Up-to-date outputs are skipped.
-#   phantom plan runs/examples/annotate_genomes.toml
-#   phantom run  runs/examples/annotate_genomes.toml
+#   phantom plan runs/experiments/annotate_genomes.toml
+#   phantom run  runs/experiments/annotate_genomes.toml
 
 [run]
 name = "annotate_genomes"
 
 [[steps]]
 stage = "tools.checkv"
-# vtools = ["geN"]        # default: every virus identification tool
+# vtools = ["genomad"]    # default: every virus identification tool
 # samples = ["S1", "S2"]  # default: every sample
 # dry_run = true
 

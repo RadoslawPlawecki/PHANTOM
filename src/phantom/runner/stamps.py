@@ -25,12 +25,12 @@ from typing import Any
 from phantom.config.loader import ConfigLoader
 
 
-def params_dict(p: Any) -> dict[str, Any]:
-    return dataclasses.asdict(p)
+def params_dict(params: Any) -> dict[str, Any]:
+    return dataclasses.asdict(params)
 
 
-def params_digest(p: Any) -> str:
-    payload = json.dumps(params_dict(p), sort_keys=True, default=str)
+def params_digest(params: Any) -> str:
+    payload = json.dumps(params_dict(params), sort_keys=True, default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -52,7 +52,11 @@ def fingerprint(paths: list[Path]) -> str:
         if not path.exists():
             h.update(f"{rel_to_workspace(path)}|missing\n".encode())
             continue
-        files = sorted(p for p in path.rglob("*") if p.is_file()) if path.is_dir() else [path]
+        files = (
+            sorted(params for params in path.rglob("*") if params.is_file())
+            if path.is_dir()
+            else [path]
+        )
         for file in files:
             st = file.stat()
             h.update(f"{rel_to_workspace(file)}|{st.st_size}|{st.st_mtime_ns}\n".encode())
@@ -82,8 +86,8 @@ class StampStore:
         except json.JSONDecodeError:
             return None
 
-    def status(self, stage: str, p: Any, inputs: list[Path]) -> Status:
-        stamp = self.read(stage, params_digest(p))
+    def status(self, stage: str, params: Any, inputs: list[Path]) -> Status:
+        stamp = self.read(stage, params_digest(params))
         if stamp is None:
             return Status("run", "no previous run with these parameters")
         if stamp.get("inputs_fingerprint") != fingerprint(inputs):
@@ -98,18 +102,18 @@ class StampStore:
     def write(
         self,
         stage: str,
-        p: Any,
+        params: Any,
         inputs: list[Path],
         outputs: list[Path],
         started_at: datetime,
         extra: dict | None = None,
     ) -> Path:
-        digest = params_digest(p)
+        digest = params_digest(params)
         path = self.path_for(stage, digest)
         path.parent.mkdir(parents=True, exist_ok=True)
         record = {
             "stage": stage,
-            "params": params_dict(p),
+            "params": params_dict(params),
             "params_digest": digest,
             "inputs": [rel_to_workspace(i) for i in inputs],
             "inputs_fingerprint": fingerprint(inputs),

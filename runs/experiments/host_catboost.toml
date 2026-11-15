@@ -8,9 +8,15 @@ description = "Bacterial host prediction, all virus identification tools, CatBoo
 
 [[steps]]
 stage = "classification.single"
-version = "3.0"
+version = "1.0"
 modality = "host"
-vtool = ["geN", "VIB", "VS2"]
+vtool = ["genomad", "vibrant", "virsorter2"]  # or the abbreviations geN, VIB, VS2
 model = "catboost"
 validators = ["loocv", "rcv"]
 smote = false
+
+[[steps]]
+stage = "classification.figures"
+version = "1.0"
+model = "catboost"
+kinds = ["single"]

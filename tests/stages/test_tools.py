@@ -11,11 +11,11 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from tests.stages.conftest import jobs_for, run_stage, validate_stage
 
 import phantom.stages  # noqa: F401 -- registers the stages
 from phantom.runner.loader import RunFileError
 from phantom.runner.stamps import StampStore
+from tests.stages.conftest import jobs_for, run_stage, validate_stage
 
 FAKE = textwrap.dedent(
     """
@@ -65,10 +65,10 @@ def tools_ws(ws):
     fake.write_text(FAKE, encoding="utf-8")
     with open(ws.config_path, "a", encoding="utf-8") as f:
         f.write(TOOLS_CONFIG.format(python=sys.executable, fake=fake))
-    for vtool in ("genomad", "vibrant"):
-        d = ws.data_root / "genomes" / vtool
+    for virus_identification_tool in ("genomad", "vibrant"):
+        d = ws.data_root / "genomes" / virus_identification_tool
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"S1_{vtool[:3]}.fna").write_text(">c\nACGT\n", encoding="utf-8")
+        (d / f"S1_{virus_identification_tool[:3]}.fna").write_text(">c\nACGT\n", encoding="utf-8")
     return ws
 
 
@@ -87,16 +87,18 @@ def _calls(ws):
 def test_checkv_targets_and_config(tools_ws, tctx):
     run_stage("tools.checkv", tctx, vtools=["geN"], samples=["S1"], cores=8)
     (call,) = _calls(tools_ws)
-    argv, cfg = call["argv"], call["config"]
+    argv, run_config = call["argv"], call["config"]
     assert argv[-1] == "all_checkv"
     assert argv[argv.index("--cores") + 1] == "8"
     assert "--use-conda" in argv
-    assert cfg["vtools"] == ["genomad"]  # abbreviation mapped to the tool name
-    assert cfg["samples"] == ["S1"]
-    assert cfg["threads"]["checkv"] == 2
-    assert cfg["envs"]["checkv"] == "base"
-    assert cfg["databases"]["checkv"] == str(tools_ws.root / "db" / "checkv")
-    assert cfg["tags"] == {"cherry": "CHR", "phagcn": "PGN", "phavip": "PHV"}
+    assert run_config["selected_virus_identification_tools"] == [
+        "genomad"
+    ]  # abbreviation mapped to the tool name
+    assert run_config["samples"] == ["S1"]
+    assert run_config["threads"]["checkv"] == 2
+    assert run_config["envs"]["checkv"] == "base"
+    assert run_config["databases"]["checkv"] == str(tools_ws.root / "db" / "checkv")
+    assert run_config["filename_tags"] == {"cherry": "CHR", "phagcn": "PGN", "phavip": "PHV"}
 
 
 def test_dry_run_is_not_stamped(tools_ws, tctx):
@@ -121,17 +123,17 @@ def test_phavip_needs_phanotate_orfs(tools_ws, tctx):
         validate_stage("tools.phabox2", tctx, tasks=["phavip"], vtools=["geN"])
 
 
-def test_missing_config_is_reported(ctx):
+def test_missing_config_is_reported(context):
     # The plain fixture config has no [workflow]/[databases]/... sections.
     with pytest.raises(RunFileError) as exc:
-        validate_stage("tools.checkv", ctx)
+        validate_stage("tools.checkv", context)
     text = "\n".join(exc.value.errors)
     assert "config.toml is missing [databases].checkv" in text
     assert "config.toml is missing [threads].checkv" in text
 
 
 def test_unknown_vtool(tctx):
-    with pytest.raises(RunFileError, match="vtool 'XYZ' not in \\[tools\\]"):
+    with pytest.raises(RunFileError, match="vtool 'XYZ' is not a virus identification tool"):
         jobs_for("tools.checkv", tctx, vtools=["XYZ"])
 
 
@@ -143,15 +145,15 @@ def test_snakefile_parses_with_generated_config(tools_ws, tctx, tmp_path):
     snakemake = Path(shutil.which("conda")).parents[1] / "envs" / "snakemake" / "bin" / "snakemake"
     if not snakemake.exists():
         pytest.skip("no 'snakemake' conda environment")
-    cfg = tmp_path / "cfg.json"
-    cfg.write_text(json.dumps(snakemake_config(tctx, ["geN"], None)), encoding="utf-8")
-    out = subprocess.run(  # noqa: S603
+    run_config = tmp_path / "cfg.json"
+    run_config.write_text(json.dumps(snakemake_config(tctx, ["geN"], None)), encoding="utf-8")
+    output = subprocess.run(  # noqa: S603
         [
             str(snakemake),
             "--snakefile",
             str(Path(__file__).resolve().parents[2] / "workflow" / "Snakefile"),
             "--configfile",
-            str(cfg),
+            str(run_config),
             "--directory",
             str(tmp_path),
             "--list-rules",
@@ -160,7 +162,7 @@ def test_snakefile_parses_with_generated_config(tools_ws, tctx, tmp_path):
         text=True,
         check=True,
     ).stdout.split()
-    assert {"all_checkv", "checkv", "phabox2_phavip", "setup_genomad"} <= set(out)
+    assert {"all_checkv", "checkv", "phabox2_phavip", "setup_genomad"} <= set(output)
 
 
 def test_envs_and_software_are_optional(tools_ws, tctx):
@@ -177,3 +179,8 @@ def test_envs_and_software_are_optional(tools_ws, tctx):
     run_stage("tools.checkv", fresh, vtools=["geN"])
     (call,) = _calls(tools_ws)
     assert call["config"]["envs"] == {}
+
+
+def test_tools_accept_full_names(tctx):
+    (job,) = jobs_for("tools.checkv", tctx, vtools=["vibrant", "geN"])
+    assert job.params.vtools == ["VIB", "geN"]

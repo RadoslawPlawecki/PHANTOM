@@ -1,6 +1,6 @@
 """
 Feature-engineering optimization: runs the evaluation strategies
-(strategies/exploratory.py, nested_cv.py, permutation_search.py) on one
+(exploratory.py, nested_cv.py, permutation_test.py) on one
 loaded, masked dataset and saves everything under one output directory.
 Driven by the features.optimize stage (phantom/stages/optimization.py).
 """
@@ -13,8 +13,8 @@ import pandas as pd
 
 from phantom.analysis.classification.data.labeling import Labeling
 
+from .exploratory import run_exploratory
 from .search import RunConfig
-from .strategies.exploratory import run_exploratory
 
 
 def run_optimization(
@@ -40,9 +40,9 @@ def run_optimization(
     """
     os.makedirs(out_dir, exist_ok=True)
 
-    from phantom.analysis.classification.reporting.saver import ExperimentSaver
+    from phantom.analysis.classification.reporting.result_files import ResultFileWriter
 
-    ExperimentSaver(exp_dir=str(out_dir)).save_metadata(
+    ResultFileWriter(exp_dir=str(out_dir)).save_metadata(
         {
             "tool": tool,
             "mode": mode,
@@ -50,6 +50,7 @@ def run_optimization(
             "validator": config.validator,
             "metric": config.metric,
             "smote": config.smote,
+            "seed": config.seed,
             "outer_folds": outer_folds,
             "outer_repeats": outer_repeats,
             "inner_trials": inner_trials,
@@ -107,11 +108,11 @@ def _run_mode_nested(
     inner_trials: int | None,
     top_k_features: int,
 ) -> None:
-    from phantom.analysis.classification.ml.evaluator import SupervisedEvaluator
-    from phantom.analysis.classification.reporting.saver import ExperimentSaver
+    from phantom.analysis.classification.machine_learning.metrics import SupervisedEvaluator
+    from phantom.analysis.classification.reporting.result_files import ResultFileWriter
     from phantom.analysis.classification.reporting.text_reports import ReportFormatter
 
-    from .strategies.nested_cv import run_nested_cv
+    from .nested_cv import run_nested_cv
 
     result = run_nested_cv(
         tool,
@@ -124,6 +125,7 @@ def _run_mode_nested(
         outer_repeats=outer_repeats,
         inner_trials=inner_trials,
         top_k=top_k_features,
+        random_state=config.seed,
     )
     full_metrics = SupervisedEvaluator.evaluate(
         result.full.y_true, result.full.y_pred, result.full.y_prob, result.full.patient_ids
@@ -138,7 +140,7 @@ def _run_mode_nested(
 
     nested_dir = os.path.join(out_dir, "nested")
     os.makedirs(nested_dir, exist_ok=True)
-    saver = ExperimentSaver(exp_dir=nested_dir)
+    saver = ResultFileWriter(exp_dir=nested_dir)
     saver.save_metrics(dict(full_metrics), subfolder="full")
     saver.save_predictions(
         result.full.y_true,
@@ -183,7 +185,7 @@ def _run_mode_permutation(
 ) -> None:
     from phantom.analysis.classification.reporting.text_reports import ReportFormatter
 
-    from .strategies.permutation_search import run_permutation_test
+    from .permutation_test import run_permutation_test
 
     result = run_permutation_test(
         tool,
@@ -195,6 +197,7 @@ def _run_mode_permutation(
         n_permutations=n_permutations,
         permutation_trials=permutation_trials,
         observed_score=observed_score,
+        random_state=config.seed,
     )
     print(ReportFormatter.format_permutation_test(result, config.metric))
 

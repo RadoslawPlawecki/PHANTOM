@@ -1,4 +1,9 @@
-[tools]
+# PHANTOM's configuration: WHERE things are -- data and result folders, tool
+# databases, conda environments, threads. Generic: works as is on any machine.
+# Per-machine changes go into config.local.toml next to it (not tracked by git),
+# which overrides this file key by key. WHAT to compute is in run files (runs/).
+
+[virus-identification-tools]
 geN = "genomad"
 VIB = "vibrant"
 VS2 = "virsorter2"
@@ -8,16 +13,22 @@ comp = { tool = "phagcn", tag = "PGN", label = "Virus taxonomy" }
 host = { tool = "cherry", tag = "CHR", label = "Bacterial host prediction" }
 func = { tool = "phavip", tag = "PHV", label = "Gene function" }
 
+[raw]
+path = "data/raw"
+type = "directory"
+description = "Your input: one FASTA assembly per sample (any name) in a folder per class, case/ and control/."
+
+
 [samples]
 path = "data/samples.csv"
 type = "file"
-description = "Sample sheet (your input): one row per sample, columns assembly,label[,id]; any file names."
+description = "Sample mapping made by preprocessing.samples: id (S<n>), assembly (path in the raw folder), label."
 
 
 [assemblies]
 path = "data/assemblies"
 type = "directory"
-description = "Assemblies as S<n>.fa links to the files of the sample sheet (made by preprocessing.samples)."
+description = "The raw assemblies renamed: S<n>.fa links to them (made by preprocessing.samples)."
 
 
 [genomad]
@@ -119,6 +130,11 @@ vibrant = 5
 virsorter2 = 1
 checkv = 16
 phabox2 = 40
+
+
+[classes]  # how labels 0 and 1 are named in figures and file names
+control = "Control"  # label 0
+case = "Case"        # label 1
 
 
 [features]

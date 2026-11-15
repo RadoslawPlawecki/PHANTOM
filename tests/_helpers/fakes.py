@@ -39,24 +39,26 @@ class FakeEstimator(BaseEstimator, ClassifierMixin):
 
 
 class FakeValidator:
-    """Drop-in for LOOCVValidator / RepeatedCVValidator in fast tests: fits
+    """Drop-in for LeaveOneOutCrossValidator / RepeatedCrossValidator in fast tests: fits
     the wrapper once on everything and predicts on everything. Returns a real
-    ``CVResults`` so downstream SupervisedEvaluator.evaluate works unchanged."""
+    ``CrossValidationResults`` so downstream SupervisedEvaluator.evaluate works unchanged."""
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
 
     def run(self, model_wrapper, X, y):
-        from phantom.analysis.classification.ml.validators import CVResults
+        from phantom.analysis.classification.machine_learning.cross_validation import (
+            CrossValidationResults,
+        )
 
         X = np.asarray(X, dtype=float)
         y = np.asarray(y)
         model_wrapper.fit(X, y)
-        return CVResults(
+        return CrossValidationResults(
             y_true=y.copy(),
             y_pred=np.asarray(model_wrapper.predict(X)),
             y_prob=np.asarray(model_wrapper.predict_proba(X))[:, 1],
-            test_idx=np.arange(len(y)),
+            test_indices=np.arange(len(y)),
             importance_mean=np.asarray(
                 getattr(model_wrapper, "feature_importances_", np.zeros(X.shape[1]))
             ),

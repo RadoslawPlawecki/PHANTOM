@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-FIXTURES = Path(__file__).parent / "fixtures"
+MINIMAL_CONFIG = Path(__file__).parent / "_helpers" / "minimal_config.toml"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -50,6 +50,23 @@ def _seed():
     np.random.seed(1234)
 
 
+@pytest.fixture(autouse=True)
+def _no_latex(monkeypatch):
+    """Plots without a TeX run: fast, and the same on every machine."""
+    from phantom.config import plotting
+
+    monkeypatch.setattr(plotting, "latex_available", lambda: False)
+
+
+@pytest.fixture(autouse=True)
+def _restore_active_config(monkeypatch):
+    """ConfigLoader.activate() sets process-wide state: undo it after each test."""
+    from phantom.config.loader import ConfigLoader
+
+    monkeypatch.setattr(ConfigLoader, "ACTIVE_PATH", ConfigLoader.ACTIVE_PATH)
+    monkeypatch.setattr(ConfigLoader, "DATA_ROOT", ConfigLoader.DATA_ROOT)
+
+
 @pytest.fixture
 def phantom_data_root(tmp_path, monkeypatch):
     """Point ConfigLoader's class-level roots at a throwaway tree so nothing
@@ -67,7 +84,7 @@ def phantom_data_root(tmp_path, monkeypatch):
 
 @pytest.fixture
 def minimal_config_text() -> str:
-    return (FIXTURES / "config" / "config.minimal.toml").read_text(encoding="utf-8")
+    return MINIMAL_CONFIG.read_text(encoding="utf-8")
 
 
 @pytest.fixture
@@ -93,3 +110,12 @@ def tmp_workspace(phantom_data_root, minimal_config_text):
     for vtool_name in VTOOLS.values():
         (ws.data_root / "masks" / vtool_name).mkdir(parents=True, exist_ok=True)
     return ws
+
+
+def pytest_collection_modifyitems(items):
+    """Every test is one kind -- unit, regression or e2e -- by its folder, so
+    each kind runs on its own: pytest -m unit | -m regression | -m e2e."""
+    for item in items:
+        parts = Path(str(item.fspath)).parts
+        kind = "e2e" if "e2e" in parts else "regression" if "regression" in parts else "unit"
+        item.add_marker(getattr(pytest.mark, kind))

@@ -14,27 +14,27 @@ from phantom.runner.loader import (
 )
 
 
-def _jobs(doc, ctx, overrides=()):
-    return build_jobs(apply_overrides(parse_run_doc(doc), list(overrides)), ctx)
+def _jobs(doc, context, overrides=()):
+    return build_jobs(apply_overrides(parse_run_doc(doc), list(overrides)), context)
 
 
-def test_grid_expands_lists_into_jobs_in_order(toy, ctx):
-    jobs = _jobs({"steps": [{"stage": "test.echo", "name": "a", "n": [1, 2, 3]}]}, ctx)
+def test_grid_expands_lists_into_jobs_in_order(toy, context):
+    jobs = _jobs({"steps": [{"stage": "test.echo", "name": "a", "n": [1, 2, 3]}]}, context)
     assert [j.params.n for j in jobs] == [1, 2, 3]
     assert all(j.params.name == "a" for j in jobs)
 
 
-def test_non_grid_list_field_is_not_expanded(toy, ctx):
-    (job,) = _jobs({"steps": [{"stage": "test.echo", "name": "a", "tags": ["a", "b"]}]}, ctx)
+def test_non_grid_list_field_is_not_expanded(toy, context):
+    (job,) = _jobs({"steps": [{"stage": "test.echo", "name": "a", "tags": ["a", "b"]}]}, context)
     assert job.params.tags == ["a", "b"]
 
 
-def test_defaults_are_filled(toy, ctx):
-    (job,) = _jobs({"steps": [{"stage": "test.echo", "name": "a"}]}, ctx)
+def test_defaults_are_filled(toy, context):
+    (job,) = _jobs({"steps": [{"stage": "test.echo", "name": "a"}]}, context)
     assert (job.params.n, job.params.tags, job.params.flag, job.params.src) == (1, [], False, None)
 
 
-def test_all_errors_in_a_step_are_reported_together(toy, ctx):
+def test_all_errors_in_a_step_are_reported_together(toy, context):
     doc = {
         "steps": [
             {"stage": "test.ech"},
@@ -42,7 +42,7 @@ def test_all_errors_in_a_step_are_reported_together(toy, ctx):
         ]
     }
     with pytest.raises(RunFileError) as exc:
-        _jobs(doc, ctx)
+        _jobs(doc, context)
     text = "\n".join(exc.value.errors)
     assert "did you mean 'test.echo'" in text
     assert "unknown parameter 'names' -- did you mean 'name'?" in text
@@ -52,9 +52,9 @@ def test_all_errors_in_a_step_are_reported_together(toy, ctx):
     assert "tags: expected list of (one of 'a', 'b'), got ['c']" in text
 
 
-def test_empty_grid_list_is_an_error(toy, ctx):
+def test_empty_grid_list_is_an_error(toy, context):
     with pytest.raises(RunFileError, match="n: empty list"):
-        _jobs({"steps": [{"stage": "test.echo", "name": "a", "n": []}]}, ctx)
+        _jobs({"steps": [{"stage": "test.echo", "name": "a", "n": []}]}, context)
 
 
 @pytest.mark.parametrize(
@@ -71,9 +71,9 @@ def test_malformed_documents(doc):
         parse_run_doc(doc)
 
 
-def test_provenance_table_is_accepted(toy, ctx):
+def test_provenance_table_is_accepted(toy, context):
     doc = {"provenance": {"git_commit": "abc"}, "steps": [{"stage": "test.echo", "name": "a"}]}
-    assert len(_jobs(doc, ctx)) == 1
+    assert len(_jobs(doc, context)) == 1
 
 
 @pytest.mark.parametrize(
@@ -90,16 +90,16 @@ def test_parse_override(text, expected):
     assert parse_override(text) == expected
 
 
-def test_override_applies_to_matching_steps_only(toy, ctx):
+def test_override_applies_to_matching_steps_only(toy, context):
     doc = {"steps": [{"stage": "test.echo", "name": "a"}, {"stage": "test.consume"}]}
-    jobs = _jobs(doc, ctx, ["n=[4,5]", "test.consume.tag=z"])
+    jobs = _jobs(doc, context, ["n=[4,5]", "test.consume.tag=z"])
     assert [j.params.n for j in jobs if j.stage.name == "test.echo"] == [4, 5]
     assert [j.params.tag for j in jobs if j.stage.name == "test.consume"] == ["z"]
 
 
-def test_override_without_target_is_an_error(toy, ctx):
+def test_override_without_target_is_an_error(toy, context):
     with pytest.raises(RunFileError, match="no parameter 'nope'"):
-        _jobs({"steps": [{"stage": "test.echo", "name": "a"}]}, ctx, ["nope=1"])
+        _jobs({"steps": [{"stage": "test.echo", "name": "a"}]}, context, ["nope=1"])
 
 
 def test_load_run_file_errors(tmp_path):

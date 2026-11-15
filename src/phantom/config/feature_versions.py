@@ -72,12 +72,12 @@ class FeatureConfigManager:
         v_table.add("path", base_path)
         v_table.add("version", version_str)
         v_table.add("type", "directory")
-        for sub_key, (folder_name, desc) in NEW_VERSION_STAGES.items():
-            sub_table = tomlkit.table()
-            sub_table.add("path", folder_name)
-            sub_table.add("type", "directory")
-            sub_table.add("description", desc)
-            v_table.add(sub_key, sub_table)
+        for stage_key, (folder_name, description) in NEW_VERSION_STAGES.items():
+            stage_table = tomlkit.table()
+            stage_table.add("path", folder_name)
+            stage_table.add("type", "directory")
+            stage_table.add("description", description)
+            v_table.add(stage_key, stage_table)
         doc["features"].add(f"v{version_str.replace('.', '_')}", v_table)
         local.write_text(tomlkit.dumps(doc), encoding="utf-8")
         return ConfigLoader.resolve_data_path(base_path) / NEW_VERSION_STAGES["raw"][0]

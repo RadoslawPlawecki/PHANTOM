@@ -15,7 +15,7 @@ def test_import_phantom():
 
 def test_key_modules_import():
     from phantom.analysis.classification.data.labeling import Labeling
-    from phantom.analysis.classification.ml.evaluator import SupervisedEvaluator
+    from phantom.analysis.classification.machine_learning.metrics import SupervisedEvaluator
     from phantom.analysis.features.phabox2.matrix import build_matrix
     from phantom.config.feature_versions import FeatureConfigManager
 
@@ -45,7 +45,7 @@ def test_fake_validator_returns_cvresults():
     y = np.array([0, 1, 0, 1])
     res = FakeValidator().run(FakeEstimator(), X, y)
     assert res.y_true.tolist() == [0, 1, 0, 1]
-    assert res.test_idx.tolist() == [0, 1, 2, 3]
+    assert res.test_indices.tolist() == [0, 1, 2, 3]
 
 
 def test_assert_feature_matrix_accepts_valid():

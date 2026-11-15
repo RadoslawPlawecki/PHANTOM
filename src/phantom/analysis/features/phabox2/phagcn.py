@@ -29,7 +29,8 @@ class PhagcnFeaturePipeline:
 
         def extract_taxonomy(row):
             lineage_parts = row["Lineage"].split(";")
-            scores = [float(x) for x in row["PhaGCNScore"].split(";")]
+            # str(): a single-rank score ("0.99") is read from the CSV as a number.
+            scores = [float(x) for x in str(row["PhaGCNScore"]).split(";")]
             taxonomy = {}
             # PhaGCN can report fewer scores than lineage ranks; ranks without
             # a score are dropped (strict=True would raise on real data).

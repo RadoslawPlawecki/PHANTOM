@@ -1,8 +1,8 @@
 # The whole pipeline, from assemblies to classification results.
-# See the Quick start page of the wiki. Input: the sample sheet
-# data/samples.csv -- one row per sample, columns assembly,label: the path of
-# its assembly (any file name; relative = next to the sheet) and 1 = case,
-# 0 = control. Samples become S1, S2, ... in the sheet's row order.
+# Input: the raw folder data/raw -- one FASTA assembly per sample (any
+# file name, or a folder per sample holding one), in data/raw/case/ and
+# data/raw/control/: the folder gives the label. Samples become S1, S2, ...
+# in path order; the mapping is written to data/samples.csv.
 #   phantom run runs/setup.toml       # once: install the external tools
 #   phantom plan runs/pipeline.toml   # optional: see what will run
 #   phantom run runs/pipeline.toml
@@ -10,12 +10,12 @@
 
 [run]
 name = "pipeline"
-description = "Sample sheet -> viral genomes -> annotation -> features v1.0 -> classifiers"
+description = "Raw assemblies -> viral genomes -> annotation -> features v1.0 -> classifiers"
 
-# --- 1. Samples and virus identification (one job per assembly, in parallel) --
+# Samples and virus identification (one job per assembly, in parallel)
 
 [[steps]]
-stage = "preprocessing.samples"         # sheet -> S<n>.fa links + id, file, label in the metadata
+stage = "preprocessing.samples"         # data/raw -> S<n>.fa links, mapping (id, assembly, label)
 
 [[steps]]
 stage = "tools.genomad"
@@ -26,7 +26,7 @@ stage = "tools.vibrant"
 [[steps]]
 stage = "tools.virsorter2"
 
-# --- 2. Genomes, quality, labels ----------------------------------------------
+# Genomes, quality, labels
 
 [[steps]]
 stage = "preprocessing.collect"
@@ -39,12 +39,12 @@ stage = "preprocessing.masks"           # MQ/HQ: completeness >= 50/75 %, contam
 
 [[steps]]
 stage = "preprocessing.metadata"
-targets = ["runtimes", "checkv", "sizes"]  # labels already come from the sample sheet
+targets = ["runtimes", "checkv", "sizes"]  # labels already come from the class folders
 
 [[steps]]
 stage = "preprocessing.visualize"
 
-# --- 3. Gene calling and annotation -------------------------------------------
+# Gene calling and annotation
 
 [[steps]]
 stage = "tools.phanotate"
@@ -53,7 +53,7 @@ stage = "tools.phanotate"
 stage = "tools.phabox2"
 tasks = ["cherry", "phagcn", "phavip"]  # host, taxonomy, gene function
 
-# --- 4. Features (version 1.0) ------------------------------------------------
+# Features (version 1.0)
 
 [[steps]]
 stage = "features.import"
@@ -78,7 +78,7 @@ feature_col = { cherry = "ncbi_genus", phagcn = "genus" }
 binary = true
 min_patients = 2
 
-# --- 5. Classification ----------------------------------------------------------
+# Classification
 
 [[steps]]
 stage = "classification.single"
@@ -93,3 +93,8 @@ version = "1.0"
 fusion = ["early", "late"]
 model = "catboost"
 validators = ["loocv"]
+
+[[steps]]
+stage = "classification.figures"          # metric grids, confusion matrices, top features
+version = "1.0"
+model = "catboost"

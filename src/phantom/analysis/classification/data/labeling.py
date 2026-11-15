@@ -5,9 +5,9 @@ analytics.
 
 Labels are *not* derived from sample ids in code. They are read from the
 ``label`` column of the merged metadata CSV (config.toml's
-``[genomes].metadata_path``), which the Preprocessing stage's labeling step
-writes through one of its ``LabelingStrategy`` classes
-(``analysis/genomes/metadata/labeling.py``).
+``[genomes].metadata_path``), written by ``preprocessing.samples`` from the
+class folders of the raw folder (or by ``preprocessing.metadata``'s labeling strategies,
+``analysis/genomes/metadata/label_strategies.py``).
 """
 
 from __future__ import annotations
@@ -49,13 +49,13 @@ class Labeling:
         path = Path(path)
         if not path.is_file():
             raise FileNotFoundError(
-                f"Metadata file not found: {path}. Run Preprocessing -> metadata -> Labeling first."
+                f"Metadata file not found: {path}. Run preprocessing.samples first."
             )
         df = pd.read_csv(path, sep=";")
         if LABEL_COLUMN not in df.columns:
             raise ValueError(
-                f"No '{LABEL_COLUMN}' column in {path}. Run Preprocessing -> metadata -> "
-                "Labeling first."
+                f"No '{LABEL_COLUMN}' column in {path}. Run preprocessing.samples (labels "
+                'from the raw folder\'s class folders) or preprocessing.metadata with targets = ["labeling"].'
             )
         df = df[["id", LABEL_COLUMN]].dropna(subset=[LABEL_COLUMN])
         return cls(df.set_index("id")[LABEL_COLUMN], source=path)
@@ -63,7 +63,8 @@ class Labeling:
     @classmethod
     def default(cls) -> Labeling:
         """
-        Labels from the metadata CSV configured in config.toml. Cached per
+        Labels from the metadata CSV of the active configuration (the one
+        ``phantom --config`` was started with, see ConfigLoader.activate). Cached per
         (path, modification time), so repeated calls (e.g. one FeatureMatrixLoader
         per Optuna trial) don't re-read the file, while relabeling in the
         same session is still picked up.

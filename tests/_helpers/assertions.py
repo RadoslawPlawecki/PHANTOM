@@ -35,9 +35,9 @@ def assert_valid_metrics(metrics: dict) -> None:
         score = metrics[key]["score"]
         assert -0.0001 <= score <= 1.0001, f"{key} out of [0, 1]: {score}"
     assert -1.0001 <= metrics["mcc"]["score"] <= 1.0001
-    cm = metrics["confusion_matrix"]
-    assert {"TP", "TN", "FP", "FN"} == set(cm)
-    assert all(isinstance(v, int) and v >= 0 for v in cm.values())
+    confusion = metrics["confusion_matrix"]
+    assert {"TP", "TN", "FP", "FN"} == set(confusion)
+    assert all(isinstance(v, int) and v >= 0 for v in confusion.values())
 
 
 def assert_metrics_json(path: str | Path) -> dict:

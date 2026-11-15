@@ -1,11 +1,10 @@
 """
 External bioinformatics tools of the PHANTOM pipeline, as one Snakemake
-workflow. Driven by `phantom run` (stages
-tools.*), which passes everything machine-specific through --configfile,
-built from config.toml: absolute paths, databases, conda environments and
-thread counts. Nothing here is hardcoded to one machine.
+workflow. Driven by `phantom run` (stages tools.*), which passes everything
+machine-specific through --configfile, built from config.toml: absolute paths,
+databases, conda environments and thread counts.
 
-    assemblies (S<n>.fa) --> genomad / vibrant / virsorter2          (per sample)
+    assemblies (S<n>.fa) --> genomad / vibrant / virsorter2      (per sample)
     genomes/<tool>/*.fna --> checkv, phabox2 cherry|phagcn, phanotate
     phanotate ORFs --> phabox2 phavip
 
@@ -23,31 +22,67 @@ import glob
 import re
 from pathlib import Path
 
-P = config["paths"]  # absolute directories
-DB = config["databases"]  # absolute database paths
-ENV = config["envs"]  # conda environment name per tool
-T = config["threads"]
-SOFT = config["software"]  # absolute paths of local tool checkouts
-TOOLS = config["tools"]  # abbreviation -> tool name, e.g. geN -> genomad
-TAG = config["tags"]  # phabox2 task -> filename tag, e.g. cherry -> CHR
+PATHS = config["paths"]  # absolute directories
+DATABASES = config["databases"]  # absolute database paths
+ENVIRONMENTS = config["envs"]  # conda environment name per tool
+THREADS = config["threads"]
+SOFTWARE = config["software"]  # absolute paths of local tool checkouts
+VIRUS_IDENTIFICATION_TOOLS = config["virus_identification_tools"]  # abbreviation -> tool name, e.g. geN -> genomad
+FILENAME_TAGS = config["filename_tags"]  # phabox2 task -> filename tag, e.g. cherry -> CHR
 SAMPLES = config.get("samples")  # None = every sample found
-VTOOLS = config.get("vtools") or list(TOOLS.values())
-ABBR = {name: abbr for abbr, name in TOOLS.items()}
+SELECTED_TOOLS = config.get("selected_virus_identification_tools") or list(VIRUS_IDENTIFICATION_TOOLS.values())
+ABBREVIATION_OF = {name: abbr for abbr, name in VIRUS_IDENTIFICATION_TOOLS.items()}
 SETUP = config.get("setup_dir", ".")  # markers of finished setup_<tool> checks
-PHABOX2_DB_URL = "https://github.com/KennthShang/PhaBOX/releases/download/v2/phabox_db_v2_2.zip"
+# Databases at the exact versions the published results were produced with:
+# downloaded from a fixed URL and verified against a SHA-256 before use.
+DB_DOWNLOADS = {
+    "genomad": {
+        "url": "https://portal.nersc.gov/genomad/__data__/genomad_db_v1.9.tar.gz",
+        "sha256": "47a54faa9584422d6ea1328550d0c78d5fc9ac82ddd1ca9532c1ed365c8e572c",
+        "folder": "genomad_db",
+    },
+    "checkv": {
+        "url": "https://portal.nersc.gov/CheckV/checkv-db-v1.5.tar.gz",
+        "sha256": "10e20b58873dac7862bd7e4379434e93f23968eb1fdd8db5ddcd8e9815f2bc19",
+        "folder": "checkv-db-v1.5",
+    },
+    "phabox2": {
+        "url": "https://github.com/KennthShang/PhaBOX/releases/download/v2/phabox_db_v2_2.zip",
+        "sha256": "4bdcd1954fff40a84784218828c475f3470cabb831fe65ec74e557d3525f9bc6",
+        "folder": "phabox_db_v2_2",
+    },
+}
+
+
+def fetch_db(tool, db, tmp):
+    """Shell: download the pinned database of `tool`, check its SHA-256,
+    unpack it and move it to `db` -- only if `db` does not exist yet."""
+    d = DB_DOWNLOADS[tool]
+    archive = f"{tmp}/" + d["url"].rsplit("/", 1)[1]
+    unpack = (
+        f"unzip -q {archive} -d {tmp}"
+        if archive.endswith(".zip")
+        else f"tar -xzf {archive} -C {tmp}"
+    )
+    return (
+        f"if [ ! -d {db} ]; then rm -rf {tmp} && mkdir -p {tmp} && "
+        f"curl -fL --retry 3 -o {archive} {d['url']} && "
+        f"echo '{d['sha256']}  {archive}' | sha256sum -c - && "
+        f"{unpack} && mv {tmp}/{d['folder']} {db} && rm -rf {tmp}; fi"
+    )
 
 
 def env(tool):
     """An existing environment named in [envs], else the pinned envs/<tool>.yaml."""
-    return ENV.get(tool) or f"envs/{tool}.yaml"
+    return ENVIRONMENTS.get(tool) or f"envs/{tool}.yaml"
 
 
-VIBRANT = f"python3 {SOFT['vibrant']}/VIBRANT_run.py" if SOFT.get("vibrant") else "VIBRANT_run.py"
-PHANOTATE = f"{SOFT['phanotate']}/phanotate.py" if SOFT.get("phanotate") else "phanotate.py"
+VIBRANT = f"python3 {SOFTWARE['vibrant']}/VIBRANT_run.py" if SOFTWARE.get("vibrant") else "VIBRANT_run.py"
+PHANOTATE = f"{SOFTWARE['phanotate']}/phanotate.py" if SOFTWARE.get("phanotate") else "phanotate.py"
 
 wildcard_constraints:
     sample=r"S\d+",
-    vtool="|".join(TOOLS.values()),
+    virus_identification_tool="|".join(VIRUS_IDENTIFICATION_TOOLS.values()),
     base=r"S\d+_[A-Za-z0-9]+",
     task="cherry|phagcn",
 
@@ -59,89 +94,89 @@ def keep(sample):
 def assemblies():
     """sample -> assembly: the S<n>.fa links preprocessing.samples makes."""
     found = {}
-    for f in sorted(glob.glob(f"{P['assemblies']}/S*.fa")):
+    for f in sorted(glob.glob(f"{PATHS['assemblies']}/S*.fa")):
         sample = Path(f).stem
         if re.fullmatch(r"S\d+", sample) and keep(sample):
             found[sample] = f
     return found
 
 
-def genome_bases(vtool):
+def genome_bases(tool):
     """Genome registry bases (S1_geN) of one identification tool."""
-    bases = [Path(f).stem for f in sorted(glob.glob(f"{P['genomes']}/{vtool}/*.fna"))]
+    bases = [Path(f).stem for f in sorted(glob.glob(f"{PATHS['genomes']}/{tool}/*.fna"))]
     return [b for b in bases if keep(b.split("_")[0])]
 
 
-# --- target rules --------------------------------------------------------------
+# target rules
 
 
 rule all_genomad:
     input:
-        lambda wc: [f"{P['genomad']}/{s}_{ABBR.get('genomad', 'genomad')}" for s in assemblies()],
+        lambda wildcards: [f"{PATHS['genomad']}/{sample}_{ABBREVIATION_OF.get('genomad', 'genomad')}" for sample in assemblies()],
 
 
 rule all_vibrant:
     input:
-        lambda wc: [f"{P['vibrant']}/{s}_{ABBR.get('vibrant', 'vibrant')}" for s in assemblies()],
+        lambda wildcards: [f"{PATHS['vibrant']}/{sample}_{ABBREVIATION_OF.get('vibrant', 'vibrant')}" for sample in assemblies()],
 
 
 rule all_virsorter2:
     input:
-        lambda wc: [f"{P['virsorter2']}/{s}_{ABBR.get('virsorter2', 'virsorter2')}" for s in assemblies()],
+        lambda wildcards: [f"{PATHS['virsorter2']}/{sample}_{ABBREVIATION_OF.get('virsorter2', 'virsorter2')}" for sample in assemblies()],
 
 
 rule all_checkv:
     input:
-        lambda wc: [f"{P['checkv']}/{v}/{b}_ChV" for v in VTOOLS for b in genome_bases(v)],
+        lambda wildcards: [f"{PATHS['checkv']}/{tool}/{base}_ChV" for tool in SELECTED_TOOLS for base in genome_bases(tool)],
 
 
 rule all_phanotate:
     input:
-        lambda wc: [
-            f"{P['phanotate_proteins']}/{v}/{b}_PHA_PROT.faa"
-            for v in VTOOLS
-            for b in genome_bases(v)
+        lambda wildcards: [
+            f"{PATHS['phanotate_proteins']}/{tool}/{base}_PHA_PROT.faa"
+            for tool in SELECTED_TOOLS
+            for base in genome_bases(tool)
         ],
 
 
 rule all_phabox2_cherry:
     input:
-        lambda wc: [
-            f"{P['phabox2']}/cherry/{v}/{b}_{TAG.get('cherry', 'cherry')}.tsv"
-            for v in VTOOLS
-            for b in genome_bases(v)
+        lambda wildcards: [
+            f"{PATHS['phabox2']}/cherry/{tool}/{base}_{FILENAME_TAGS.get('cherry', 'cherry')}.tsv"
+            for tool in SELECTED_TOOLS
+            for base in genome_bases(tool)
         ],
 
 
 rule all_phabox2_phagcn:
     input:
-        lambda wc: [
-            f"{P['phabox2']}/phagcn/{v}/{b}_{TAG.get('phagcn', 'phagcn')}.tsv"
-            for v in VTOOLS
-            for b in genome_bases(v)
+        lambda wildcards: [
+            f"{PATHS['phabox2']}/phagcn/{tool}/{base}_{FILENAME_TAGS.get('phagcn', 'phagcn')}.tsv"
+            for tool in SELECTED_TOOLS
+            for base in genome_bases(tool)
         ],
 
 
 rule all_phabox2_phavip:
     input:
-        lambda wc: [
-            f"{P['phabox2']}/phavip/{v}/{b}_PHA_ORFs_{TAG.get('phavip', 'phavip')}.tsv"
-            for v in VTOOLS
-            for b in genome_bases(v)
+        lambda wildcards: [
+            f"{PATHS['phabox2']}/phavip/{tool}/{base}_PHA_ORFs_{FILENAME_TAGS.get('phavip', 'phavip')}.tsv"
+            for tool in SELECTED_TOOLS
+            for base in genome_bases(tool)
         ],
 
 
-# --- virus identification (geNomad, VIBRANT, VirSorter2) ------------------------
+# virus identification (geNomad, VIBRANT, VirSorter2)
 
 
 rule genomad:
     input:
-        lambda wc: assemblies()[wc.sample],
+        lambda wildcards: assemblies()[wildcards.sample],
     output:
-        directory(f"{P['genomad']}/{{sample}}_{ABBR.get('genomad', 'genomad')}"),
+        directory(f"{PATHS['genomad']}/{{sample}}_{ABBREVIATION_OF.get('genomad', 'genomad')}"),
     params:
-        db=DB.get("genomad", ""),
-    threads: T.get("genomad", 1)
+        db=DATABASES.get("genomad", ""),
+    threads: THREADS.get("genomad", 1)
     conda:
         env("genomad")
     shell:
@@ -150,12 +185,12 @@ rule genomad:
 
 rule vibrant:
     input:
-        lambda wc: assemblies()[wc.sample],
+        lambda wildcards: assemblies()[wildcards.sample],
     output:
-        directory(f"{P['vibrant']}/{{sample}}_{ABBR.get('vibrant', 'vibrant')}"),
+        directory(f"{PATHS['vibrant']}/{{sample}}_{ABBREVIATION_OF.get('vibrant', 'vibrant')}"),
     params:
         vibrant=VIBRANT,
-    threads: T.get("vibrant", 1)
+    threads: THREADS.get("vibrant", 1)
     conda:
         env("vibrant")
     shell:
@@ -164,41 +199,41 @@ rule vibrant:
 
 rule virsorter2:
     input:
-        lambda wc: assemblies()[wc.sample],
+        lambda wildcards: assemblies()[wildcards.sample],
     output:
-        directory(f"{P['virsorter2']}/{{sample}}_{ABBR.get('virsorter2', 'virsorter2')}"),
-    threads: T.get("virsorter2", 1)
+        directory(f"{PATHS['virsorter2']}/{{sample}}_{ABBREVIATION_OF.get('virsorter2', 'virsorter2')}"),
+    threads: THREADS.get("virsorter2", 1)
     conda:
         env("virsorter2")
     shell:
         "virsorter run -w {output} -i {input} --provirus-off --max-orf-per-seq 20 all"
 
 
-# --- genome quality (CheckV) ---------------------------------------------------
+# genome quality (CheckV)
 
 
 rule checkv:
     input:
-        f"{P['genomes']}/{{vtool}}/{{base}}.fna",
+        f"{PATHS['genomes']}/{{virus_identification_tool}}/{{base}}.fna",
     output:
-        directory(f"{P['checkv']}/{{vtool}}/{{base}}_ChV"),
+        directory(f"{PATHS['checkv']}/{{virus_identification_tool}}/{{base}}_ChV"),
     params:
-        db=DB.get("checkv", ""),
-    threads: T.get("checkv", 1)
+        db=DATABASES.get("checkv", ""),
+    threads: THREADS.get("checkv", 1)
     conda:
         env("checkv")
     shell:
         "checkv end_to_end {input} {output} -d {params.db} -t {threads}"
 
 
-# --- ORF calling (PHANOTATE) ---------------------------------------------------
+# ORF calling (PHANOTATE)
 
 
 rule phanotate_genes:
     input:
-        f"{P['genomes']}/{{vtool}}/{{base}}.fna",
+        f"{PATHS['genomes']}/{{virus_identification_tool}}/{{base}}.fna",
     output:
-        f"{P['phanotate_genes']}/{{vtool}}/{{base}}_PHA.gff",
+        f"{PATHS['phanotate_genes']}/{{virus_identification_tool}}/{{base}}_PHA.gff",
     params:
         phanotate=PHANOTATE,
     conda:
@@ -209,9 +244,9 @@ rule phanotate_genes:
 
 rule phanotate_bed:
     input:
-        f"{P['phanotate_genes']}/{{vtool}}/{{base}}_PHA.gff",
+        f"{PATHS['phanotate_genes']}/{{virus_identification_tool}}/{{base}}_PHA.gff",
     output:
-        f"{P['phanotate_bed']}/{{vtool}}/{{base}}_PHA.bed",
+        f"{PATHS['phanotate_bed']}/{{virus_identification_tool}}/{{base}}_PHA.bed",
     shell:
         r"""
         awk 'BEGIN{{OFS="\t"}}
@@ -227,10 +262,10 @@ rule phanotate_bed:
 
 rule phanotate_orfs:
     input:
-        genome=f"{P['genomes']}/{{vtool}}/{{base}}.fna",
-        bed=f"{P['phanotate_bed']}/{{vtool}}/{{base}}_PHA.bed",
+        genome=f"{PATHS['genomes']}/{{virus_identification_tool}}/{{base}}.fna",
+        bed=f"{PATHS['phanotate_bed']}/{{virus_identification_tool}}/{{base}}_PHA.bed",
     output:
-        f"{P['phanotate_orfs']}/{{vtool}}/{{base}}_PHA_ORFs.fna",
+        f"{PATHS['phanotate_orfs']}/{{virus_identification_tool}}/{{base}}_PHA_ORFs.fna",
     conda:
         env("bedtools")
     shell:
@@ -239,30 +274,30 @@ rule phanotate_orfs:
 
 rule phanotate_proteins:
     input:
-        f"{P['phanotate_orfs']}/{{vtool}}/{{base}}_PHA_ORFs.fna",
+        f"{PATHS['phanotate_orfs']}/{{virus_identification_tool}}/{{base}}_PHA_ORFs.fna",
     output:
-        f"{P['phanotate_proteins']}/{{vtool}}/{{base}}_PHA_PROT.faa",
+        f"{PATHS['phanotate_proteins']}/{{virus_identification_tool}}/{{base}}_PHA_PROT.faa",
     conda:
         env("seqkit")
     shell:
         "seqkit translate {input} > {output}"
 
 
-# --- PhaBOX2 (cherry, phagcn, phavip) -----------------------------------------
+# PhaBOX2 (cherry, phagcn, phavip)
 # PhaBOX2 writes a whole working directory; only the prediction table is kept.
 
 
 rule phabox2_genome_task:
     input:
-        f"{P['genomes']}/{{vtool}}/{{base}}.fna",
+        f"{PATHS['genomes']}/{{virus_identification_tool}}/{{base}}.fna",
     output:
-        f"{P['phabox2']}/{{task}}/{{vtool}}/{{base}}_{{tag}}.tsv",
+        f"{PATHS['phabox2']}/{{task}}/{{virus_identification_tool}}/{{base}}_{{tag}}.tsv",
     wildcard_constraints:
-        tag="|".join([TAG.get("cherry", "cherry"), TAG.get("phagcn", "phagcn")]),
+        tag="|".join([FILENAME_TAGS.get("cherry", "cherry"), FILENAME_TAGS.get("phagcn", "phagcn")]),
     params:
-        db=DB.get("phabox2", ""),
-        work=lambda wc: f"{P['phabox2']}/{wc.task}/{wc.vtool}/{wc.base}_{wc.tag}",
-    threads: T.get("phabox2", 1)
+        db=DATABASES.get("phabox2", ""),
+        work=lambda wildcards: f"{PATHS['phabox2']}/{wildcards.task}/{wildcards.virus_identification_tool}/{wildcards.base}_{wildcards.tag}",
+    threads: THREADS.get("phabox2", 1)
     conda:
         env("phabox2")
     shell:
@@ -275,13 +310,13 @@ rule phabox2_genome_task:
 
 rule phabox2_phavip:
     input:
-        f"{P['phanotate_orfs']}/{{vtool}}/{{base}}_PHA_ORFs.fna",
+        f"{PATHS['phanotate_orfs']}/{{virus_identification_tool}}/{{base}}_PHA_ORFs.fna",
     output:
-        f"{P['phabox2']}/phavip/{{vtool}}/{{base}}_PHA_ORFs_{TAG.get('phavip', 'phavip')}.tsv",
+        f"{PATHS['phabox2']}/phavip/{{virus_identification_tool}}/{{base}}_PHA_ORFs_{FILENAME_TAGS.get('phavip', 'phavip')}.tsv",
     params:
-        db=DB.get("phabox2", ""),
-        work=lambda wc: f"{P['phabox2']}/phavip/{wc.vtool}/{wc.base}_PHA_ORFs_{TAG.get('phavip', 'phavip')}",
-    threads: T.get("phabox2", 1)
+        db=DATABASES.get("phabox2", ""),
+        work=lambda wildcards: f"{PATHS['phabox2']}/phavip/{wildcards.virus_identification_tool}/{wildcards.base}_PHA_ORFs_{FILENAME_TAGS.get('phavip', 'phavip')}",
+    threads: THREADS.get("phabox2", 1)
     conda:
         env("phabox2")
     shell:
@@ -292,7 +327,7 @@ rule phabox2_phavip:
         "rm -rf {params.work}"
 
 
-# --- installation (stage tools.setup) ------------------------------------------
+# installation (stage tools.setup)
 # Each setup_<tool> downloads the tool's database if its [databases] path does
 # not exist yet and records that the tool starts in its environment. The
 # database is deliberately NOT a declared output: Snakemake deletes a job's
@@ -303,45 +338,38 @@ rule phabox2_phavip:
 rule setup_genomad:
     output:
         ok=f"{SETUP}/genomad.ok",
-    params:
-        db=DB.get("genomad", ""),
-        tmp=f"{SETUP}/genomad.download",
     conda:
         env("genomad")
+    params:
+        fetch=fetch_db("genomad", DATABASES.get("genomad", ""), f"{SETUP}/genomad.download"),
     shell:
-        "if [ ! -d {params.db} ]; then rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-        "genomad download-database {params.tmp} && mv {params.tmp}/genomad_db {params.db} && "
-        "rm -rf {params.tmp}; fi && genomad --version > {output.ok}"
+        "{params.fetch} && genomad --version > {output.ok}"
 
 
 rule setup_checkv:
     output:
         ok=f"{SETUP}/checkv.ok",
-    params:
-        db=DB.get("checkv", ""),
-        tmp=f"{SETUP}/checkv.download",
     conda:
         env("checkv")
+    params:
+        fetch=fetch_db("checkv", DATABASES.get("checkv", ""), f"{SETUP}/checkv.download"),
+        db=DATABASES.get("checkv", ""),
     shell:
-        "if [ ! -d {params.db} ]; then rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-        "checkv download_database {params.tmp} && mv {params.tmp}/checkv-db-v* {params.db} && "
-        "rm -rf {params.tmp}; fi && (checkv -h | head -1) > {output.ok}"
+        # CheckV searches its proteins with DIAMOND: build the index if the archive lacks it.
+        "{params.fetch} && (cd {params.db}/genome_db && "
+        "if [ ! -f checkv_reps.dmnd ]; then diamond makedb --in checkv_reps.faa --db checkv_reps; fi) && "
+        "(checkv -h | head -1) > {output.ok}"
 
 
 rule setup_phabox2:
     output:
         ok=f"{SETUP}/phabox2.ok",
-    params:
-        db=DB.get("phabox2", ""),
-        tmp=f"{SETUP}/phabox2.download",
-        url=PHABOX2_DB_URL,
     conda:
         env("phabox2")
+    params:
+        fetch=fetch_db("phabox2", DATABASES.get("phabox2", ""), f"{SETUP}/phabox2.download"),
     shell:
-        "if [ ! -d {params.db} ]; then rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-        "wget -q -O {params.tmp}/db.zip {params.url} && unzip -q {params.tmp}/db.zip -d {params.tmp} && "
-        "mv {params.tmp}/phabox_db_v2_2 {params.db} && rm -rf {params.tmp}; fi && "
-        "(phabox2 -h | head -1) > {output.ok}"
+        "{params.fetch} && (phabox2 -h | head -1) > {output.ok}"
 
 
 rule setup_virsorter2:
@@ -350,7 +378,7 @@ rule setup_virsorter2:
     output:
         ok=f"{SETUP}/virsorter2.ok",
     params:
-        db=DB.get("virsorter2", ""),
+        db=DATABASES.get("virsorter2", ""),
     threads: 4
     conda:
         env("virsorter2")
@@ -365,7 +393,7 @@ rule setup_vibrant:
     output:
         ok=f"{SETUP}/vibrant.ok",
     params:
-        checkout=SOFT.get("vibrant", ""),
+        checkout=SOFTWARE.get("vibrant", ""),
     conda:
         env("vibrant")
     shell:
