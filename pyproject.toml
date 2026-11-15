@@ -67,7 +67,6 @@ branch = true
 relative_files = true  # coverage files from the three CI test jobs combine
 source = ["src/phantom"]
 omit = [
-    "src/phantom/legacy/*",
     "*/__main__.py",
 ]
 
@@ -85,10 +84,6 @@ exclude_lines = [
 target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = [
-    "src/phantom/legacy",  # pre-refactor figure scripts, not wired into any stage
-]
-
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "S"]
 ignore = [
@@ -115,10 +110,6 @@ extend-immutable-calls = ["phantom.runner.parameters.param"]
 
 [tool.mypy]
 ignore_missing_imports = true
-exclude = [
-    "^src/phantom/legacy/",  # pre-refactor figure scripts, not wired into any stage
-]
-
 [tool.codespell]
 skip = "*.csv,*.tsv,*.json,.git,*.pdf"
 ignore-words-list = "fpr,strat,holliday"
