@@ -2,15 +2,24 @@
 # settings of the development tools (pytest, coverage, ruff, mypy, codespell).
 
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel"]
+requires = ["setuptools>=77.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "phantom"
-version = "0.1.0"
-description = "Phageome-based disease classification tool for multiclass prediction."
+version = "1.0.0rc1"
+description = "Phageome-based disease classification: from viral metagenomic assemblies to case/control classifiers."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Radosław Pławecki" },
+    { name = "Kamil Szyc" },
+    { name = "Sophia Bałdysz" },
+]
+maintainers = [{ name = "Radosław Pławecki" }]
+keywords = ["phageome", "virome", "metagenomics", "bacteriophage", "machine learning", "classification"]
 dependencies = [
     "catboost>=1.2.10",
     "imbalanced_learn>=0.14.2",
@@ -28,6 +37,9 @@ dependencies = [
 
 [project.scripts]
 phantom = "phantom.runner.cli:main"
+
+[project.urls]
+Repository = "https://github.com/RadoslawPlawecki/PHANTOM"
 
 [project.optional-dependencies]
 dev = [
