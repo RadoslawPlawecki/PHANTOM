@@ -11,7 +11,7 @@ MAIN_FILE = REPOSITORY / "src" / "phantom" / "__main__.py"
 
 
 def test_the_license_text_is_in_the_repository():
-    text = (REPOSITORY / "LICENSE").read_text(encoding="utf-8")
+    text = (REPOSITORY / "LICENSE.md").read_text(encoding="utf-8")
     assert "GNU GENERAL PUBLIC LICENSE" in text and "Version 3, 29 June 2007" in text
 
 
