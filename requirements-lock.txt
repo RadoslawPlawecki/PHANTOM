@@ -24,7 +24,7 @@ optuna==5.0.0
 packaging==25.0
 pandas==3.0.6
 pillow==12.2.0
-plotly==6.7.0
+plotly==7.1.0
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 scikit-learn==1.9.1
